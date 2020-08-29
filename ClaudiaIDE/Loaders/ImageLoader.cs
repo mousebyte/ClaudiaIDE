@@ -8,7 +8,6 @@ using ClaudiaIDE.Settings;
 
 namespace ClaudiaIDE.Loaders
 {
-
     //abstract base for asynchronous image loading
     internal abstract class ImageLoader : IImageLoader
     {
@@ -16,7 +15,7 @@ namespace ClaudiaIDE.Loaders
 
         public ImageBackgroundType BackgroundType { get; }
 
-        public ImageLoader(Setting settings, ImageBackgroundType type)
+        protected ImageLoader(Setting settings, ImageBackgroundType type)
         {
             Settings = settings;
             BackgroundType = type;
@@ -37,7 +36,7 @@ namespace ClaudiaIDE.Loaders
                     if (!File.Exists(path)) return null;
                     var bitmap = new BitmapImage();
                     bitmap.BeginInit();
-                    
+
                     bitmap.CacheOption = BitmapCacheOption.OnLoad;
                     bitmap.CreateOptions = BitmapCreateOptions.None;
                     bitmap.UriSource = new Uri(path, UriKind.RelativeOrAbsolute);

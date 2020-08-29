@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ClaudiaIDE.Loaders;
 using ClaudiaIDE.Settings;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -29,10 +30,7 @@ namespace ClaudiaIDE
         /// <summary>
         /// VS Package that provides this command, not null.
         /// </summary>
-        private readonly AsyncPackage package;
-
-        private readonly Setting _setting;
-        private readonly MenuCommand _menuItem;
+        private readonly AsyncPackage _package;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NextImage"/> class.
@@ -40,21 +38,20 @@ namespace ClaudiaIDE
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
         /// <param name="commandService">Command service to add command to, not null.</param>
-        private NextImage(AsyncPackage package, OleMenuCommandService commandService, Setting setting)
+        private NextImage(AsyncPackage package, OleMenuCommandService commandService)
         {
-            _setting = setting;
-            _setting.OnChanged.AddEventHandler(ReloadSettings);
-            this.package = package ?? throw new ArgumentNullException(nameof(package));
+            this._package = package ?? throw new ArgumentNullException(nameof(package));
             commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
             var menuCommandID = new CommandID(CommandSet, CommandId);
-            _menuItem = new MenuCommand(this.Execute, menuCommandID);
-            commandService.AddCommand(_menuItem);
-            ReloadSettings(null, EventArgs.Empty);
+            var menuItem = new OleMenuCommand(this.Execute, menuCommandID);
+            menuItem.BeforeQueryStatus += OnBeforeQueryStatus;
+            commandService.AddCommand(menuItem);
         }
 
-        public void ReloadSettings(object sender, EventArgs args)
+        private static void OnBeforeQueryStatus(object sender, EventArgs args)
         {
-            _menuItem.Enabled = _setting.ImageBackgroundType == ImageBackgroundType.Slideshow;
+            if (sender is OleMenuCommand cmd)
+                cmd.Enabled = ImageProvider.Instance.Loader.BackgroundType == ImageBackgroundType.Slideshow;
         }
 
         /// <summary>
@@ -65,28 +62,20 @@ namespace ClaudiaIDE
         /// <summary>
         /// Gets the service provider from the owner package.
         /// </summary>
-        private Microsoft.VisualStudio.Shell.IAsyncServiceProvider ServiceProvider
-        {
-            get { return this.package; }
-        }
+        private Microsoft.VisualStudio.Shell.IAsyncServiceProvider ServiceProvider => this._package;
 
         /// <summary>
         /// Initializes the singleton instance of the command.
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
-        public static async Task InitializeAsync(AsyncPackage package, Setting setting)
+        public static async Task InitializeAsync(AsyncPackage package)
         {
             // Switch to the main thread - the call to AddCommand in NextImage's constructor requires
             // the UI thread.
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
             OleMenuCommandService commandService =
                 await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
-            Instance = new NextImage(package, commandService, setting);
-        }
-
-        ~NextImage()
-        {
-            _setting.OnChanged.RemoveEventHandler(ReloadSettings);
+            Instance = new NextImage(package, commandService);
         }
 
         /// <summary>
@@ -99,9 +88,8 @@ namespace ClaudiaIDE
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            var slideshow =
-                (SlideShowImageProvider) ProvidersHolder.Instance.Providers.First(p => p.ProviderType == ImageBackgroundType.Slideshow);
-            slideshow.NextImage();
+            if (ImageProvider.Instance.Loader is SlideshowImageLoader slideshow)
+                slideshow.NextImage();
         }
     }
 }
