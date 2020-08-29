@@ -240,10 +240,13 @@
     <Compile Include="Helpers\DependencyObjectExtensions.cs" />
     <Compile Include="Helpers\ImageSourceAnimator.cs" />
     <Compile Include="Helpers\Utils.cs" />
+    <Compile Include="IImageLoader.cs" />
     <Compile Include="IImageProvider.cs" />
+    <Compile Include="ImageProvider.cs" />
     <Compile Include="ImageProvider\SingleImageEachProvider.cs" />
     <Compile Include="ImageProvider\SingleImageProvider.cs" />
     <Compile Include="ImageProvider\SlideShowImageProvider.cs" />
+    <Compile Include="Loaders\ImageLoader.cs" />
     <Compile Include="Localized\LocalManager.cs" />
     <Compile Include="Localized\ResLocalized.Designer.cs">
       <DependentUpon>ResLocalized.resx</DependentUpon>
@@ -352,6 +355,7 @@
     <Analyzer Include="..\packages\Microsoft.VisualStudio.Threading.Analyzers.15.8.209\analyzers\cs\Microsoft.VisualStudio.Threading.Analyzers.CodeFixes.dll" />
     <Analyzer Include="..\packages\Microsoft.VisualStudio.Threading.Analyzers.15.8.209\analyzers\cs\Microsoft.VisualStudio.Threading.Analyzers.dll" />
   </ItemGroup>
+  <ItemGroup />
   <PropertyGroup>
     <UseCodebase>true</UseCodebase>
   </PropertyGroup>
