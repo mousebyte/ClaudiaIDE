@@ -9,7 +9,7 @@ namespace ClaudiaIDE
         private readonly Setting _settings;
         private ImageLoader _imageLoader;
 
-        public ImageProvider(Setting settings)
+        private ImageProvider(Setting settings)
         {
             _settings = settings;
             settings.OnChanged.AddEventHandler(OnSettingsChanged);
@@ -27,6 +27,14 @@ namespace ClaudiaIDE
 
         private void ReloadSettings()
         {
+            if (_settings.ImageBackgroundType == _imageLoader?.BackgroundType) return;
+            _imageLoader = _settings.ImageBackgroundType switch
+            {
+                ImageBackgroundType.Single => new SingleImageLoader(_settings),
+                ImageBackgroundType.Slideshow => new SlideshowImageLoader(_settings)
+                //ImageBackgroundType.SingleEach => 
+            };
+            InvokeProviderChanged();
         }
 
         private void OnSettingsChanged(object sender, EventArgs e)

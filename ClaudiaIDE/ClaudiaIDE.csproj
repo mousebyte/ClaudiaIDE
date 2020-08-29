@@ -246,6 +246,8 @@
     <Compile Include="IImageProvider.cs" />
     <Compile Include="ImageProvider.cs" />
     <Compile Include="Loaders\ImageLoader.cs" />
+    <Compile Include="Loaders\SingleImageLoader.cs" />
+    <Compile Include="Loaders\SlideshowImageLoader.cs" />
     <Compile Include="Localized\LocalManager.cs" />
     <Compile Include="Localized\ResLocalized.Designer.cs">
       <DependentUpon>ResLocalized.resx</DependentUpon>
