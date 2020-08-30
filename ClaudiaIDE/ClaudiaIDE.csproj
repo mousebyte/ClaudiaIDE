@@ -247,6 +247,7 @@
     <Compile Include="ImageProvider.cs" />
     <Compile Include="Loaders\ImageFileList.cs" />
     <Compile Include="Loaders\ImageLoader.cs" />
+    <Compile Include="Loaders\SingleImageEachLoader.cs" />
     <Compile Include="Loaders\SingleImageLoader.cs" />
     <Compile Include="Loaders\SlideshowImageLoader.cs" />
     <Compile Include="Localized\LocalManager.cs" />

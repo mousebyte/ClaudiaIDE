@@ -31,8 +31,9 @@ namespace ClaudiaIDE
             _imageLoader = _settings.ImageBackgroundType switch
             {
                 ImageBackgroundType.Single => new SingleImageLoader(_settings),
-                ImageBackgroundType.Slideshow => new SlideshowImageLoader(_settings)
-                //ImageBackgroundType.SingleEach => 
+                ImageBackgroundType.Slideshow => new SlideshowImageLoader(_settings),
+                ImageBackgroundType.SingleEach => new SingleImageEachLoader(_settings),
+                _ => throw new ArgumentOutOfRangeException()
             };
             InvokeProviderChanged();
         }
