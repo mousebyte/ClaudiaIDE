@@ -5,11 +5,20 @@ using System.Text;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
+using Microsoft.VisualStudio.Shell.Settings;
+using Microsoft.VisualStudio.Threading;
+using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
 
 namespace ClaudiaIDE.Settings
 {
     public class Setting
     {
+        private static AsyncLazy<Setting> _liveModel =
+            new AsyncLazy<Setting>(CreateAsync, ThreadHelper.JoinableTaskFactory);
+
+        private static AsyncLazy<ShellSettingsManager> _settingsManager =
+            new AsyncLazy<ShellSettingsManager>(GetSettingsManagerAsync, ThreadHelper.JoinableTaskFactory);
+
         private static readonly Setting instance = new Setting();
         private static readonly string CONFIGFILE = "config.txt";
         private const string DefaultBackgroundImage = "Images\\background.png";
@@ -21,17 +30,16 @@ namespace ClaudiaIDE.Settings
 
         public static Setting Instance
         {
-            get
-            {
-                return instance;
-            }
+            get { return instance; }
         }
 
         public Setting()
         {
             var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            BackgroundImagesDirectoryAbsolutePath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, DefaultBackgroundFolder);
-            BackgroundImageAbsolutePath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, DefaultBackgroundImage);
+            BackgroundImagesDirectoryAbsolutePath =
+                Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, DefaultBackgroundFolder);
+            BackgroundImageAbsolutePath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
+                DefaultBackgroundImage);
             Opacity = 0.35;
             PositionHorizon = PositionH.Right;
             PositionVertical = PositionV.Bottom;
@@ -59,7 +67,7 @@ namespace ClaudiaIDE.Settings
         public int MaxHeight { get; set; }
         public int SoftEdgeX { get; set; }
         public int SoftEdgeY { get; set; }
-        
+
         public string BackgroundImageAbsolutePath { get; set; }
 
         public TimeSpan UpdateImageInterval { get; set; }
@@ -94,6 +102,7 @@ namespace ClaudiaIDE.Settings
             {
                 settings.ServiceProvider = serviceProvider;
             }
+
             try
             {
                 settings.Load();
@@ -102,6 +111,7 @@ namespace ClaudiaIDE.Settings
             {
                 return Setting.Deserialize();
             }
+
             return settings;
         }
 
@@ -112,6 +122,7 @@ namespace ClaudiaIDE.Settings
             {
                 settings.ServiceProvider = serviceProvider;
             }
+
             try
             {
                 await settings.LoadAsync();
@@ -120,12 +131,28 @@ namespace ClaudiaIDE.Settings
             {
                 return Setting.Deserialize();
             }
+
             return settings;
+        }
+
+        public static async Task<ShellSettingsManager> GetSettingsManagerAsync()
+        {
+
+        }
+
+        public static async Task<Setting> CreateAsync()
+        {
+            var instance = new Setting();
+            await instance.LoadAsync();
+            return instance;
         }
 
         public async Task LoadAsync()
         {
-            Microsoft.VisualStudio.Shell.IAsyncServiceProvider asyncServiceProvider = await ((Microsoft.VisualStudio.Shell.AsyncPackage)ServiceProvider).GetServiceAsync(typeof(Microsoft.VisualStudio.Shell.Interop.SAsyncServiceProvider)) as Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
+            Microsoft.VisualStudio.Shell.IAsyncServiceProvider asyncServiceProvider =
+                await ((Microsoft.VisualStudio.Shell.AsyncPackage) ServiceProvider).GetServiceAsync(
+                        typeof(Microsoft.VisualStudio.Shell.Interop.SAsyncServiceProvider)) as
+                    Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
             var testService = await asyncServiceProvider.GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
             var props = testService.Properties["ClaudiaIDE", "General"];
 
@@ -134,29 +161,32 @@ namespace ClaudiaIDE.Settings
 
         private void Load(Properties props)
         {
-            BackgroundImagesDirectoryAbsolutePath = Setting.ToFullPath((string)props.Item("BackgroundImageDirectoryAbsolutePath").Value, DefaultBackgroundFolder);
-            BackgroundImageAbsolutePath = Setting.ToFullPath((string)props.Item("BackgroundImageAbsolutePath").Value, DefaultBackgroundImage);
-            Opacity = (double)props.Item("Opacity").Value;
-            PositionHorizon = (PositionH)props.Item("PositionHorizon").Value;
-            PositionVertical = (PositionV)props.Item("PositionVertical").Value;
-            ImageStretch = (ImageStretch)props.Item("ImageStretch").Value;
-            UpdateImageInterval = (TimeSpan)props.Item("UpdateImageInterval").Value;
-            Extensions = (string)props.Item("Extensions").Value;
-            ImageBackgroundType = (ImageBackgroundType)props.Item("ImageBackgroundType").Value;
-            LoopSlideshow = (bool)props.Item("LoopSlideshow").Value;
-            ShuffleSlideshow = (bool)props.Item("ShuffleSlideshow").Value;
-            MaxWidth = (int)props.Item("MaxWidth").Value;
-            MaxHeight = (int)props.Item("MaxHeight").Value;
-            SoftEdgeX = (int)props.Item("SoftEdgeX").Value;
-            SoftEdgeY = (int)props.Item("SoftEdgeY").Value;
-            ExpandToIDE = (bool)props.Item("ExpandToIDE").Value;
-            ViewBoxPointX = (double)props.Item("ViewBoxPointX").Value;
-            ViewBoxPointY = (double)props.Item("ViewBoxPointY").Value;
+            BackgroundImagesDirectoryAbsolutePath =
+                Setting.ToFullPath((string) props.Item("BackgroundImageDirectoryAbsolutePath").Value,
+                    DefaultBackgroundFolder);
+            BackgroundImageAbsolutePath = Setting.ToFullPath((string) props.Item("BackgroundImageAbsolutePath").Value,
+                DefaultBackgroundImage);
+            Opacity = (double) props.Item("Opacity").Value;
+            PositionHorizon = (PositionH) props.Item("PositionHorizon").Value;
+            PositionVertical = (PositionV) props.Item("PositionVertical").Value;
+            ImageStretch = (ImageStretch) props.Item("ImageStretch").Value;
+            UpdateImageInterval = (TimeSpan) props.Item("UpdateImageInterval").Value;
+            Extensions = (string) props.Item("Extensions").Value;
+            ImageBackgroundType = (ImageBackgroundType) props.Item("ImageBackgroundType").Value;
+            LoopSlideshow = (bool) props.Item("LoopSlideshow").Value;
+            ShuffleSlideshow = (bool) props.Item("ShuffleSlideshow").Value;
+            MaxWidth = (int) props.Item("MaxWidth").Value;
+            MaxHeight = (int) props.Item("MaxHeight").Value;
+            SoftEdgeX = (int) props.Item("SoftEdgeX").Value;
+            SoftEdgeY = (int) props.Item("SoftEdgeY").Value;
+            ExpandToIDE = (bool) props.Item("ExpandToIDE").Value;
+            ViewBoxPointX = (double) props.Item("ViewBoxPointX").Value;
+            ViewBoxPointY = (double) props.Item("ViewBoxPointY").Value;
         }
 
         public void Load()
         {
-            var _DTE2 = (DTE2)ServiceProvider.GetService(typeof(DTE));
+            var _DTE2 = (DTE2) ServiceProvider.GetService(typeof(DTE));
             var props = _DTE2.Properties["ClaudiaIDE", "General"];
 
             Load(props);
@@ -169,10 +199,7 @@ namespace ClaudiaIDE.Settings
                 Load();
                 OnChanged?.RaiseEvent(this, EventArgs.Empty);
             }
-            catch
-            {
-
-            }
+            catch { }
         }
 
         public static Setting Deserialize()
@@ -186,9 +213,11 @@ namespace ClaudiaIDE.Settings
                 config = s.ReadToEnd();
                 s.Close();
             }
+
             var ret = JsonSerializer<Setting>.DeSerialize(config);
             ret.BackgroundImageAbsolutePath = ToFullPath(ret.BackgroundImageAbsolutePath, DefaultBackgroundImage);
-            ret.BackgroundImagesDirectoryAbsolutePath = ToFullPath(ret.BackgroundImagesDirectoryAbsolutePath, DefaultBackgroundFolder);
+            ret.BackgroundImagesDirectoryAbsolutePath =
+                ToFullPath(ret.BackgroundImagesDirectoryAbsolutePath, DefaultBackgroundFolder);
             return ret;
         }
 
@@ -198,14 +227,15 @@ namespace ClaudiaIDE.Settings
             {
                 path = defaultPath;
             }
+
             var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             if (!Path.IsPathRooted(path))
             {
                 path = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, path);
             }
+
             return path;
         }
-
     }
 
     [CLSCompliant(false), ComVisible(true)]
@@ -249,7 +279,7 @@ namespace ClaudiaIDE.Settings
     {
         public static System.Windows.Media.Stretch ConvertTo(this ImageStretch source)
         {
-            switch(source)
+            switch (source)
             {
                 case ImageStretch.Fill:
                     return System.Windows.Media.Stretch.Fill;
@@ -260,6 +290,7 @@ namespace ClaudiaIDE.Settings
                 case ImageStretch.UniformToFill:
                     return System.Windows.Media.Stretch.UniformToFill;
             }
+
             return System.Windows.Media.Stretch.None;
         }
     }
@@ -277,6 +308,7 @@ namespace ClaudiaIDE.Settings
                 case PositionV.Top:
                     return System.Windows.Media.AlignmentY.Top;
             }
+
             return System.Windows.Media.AlignmentY.Bottom;
         }
 
@@ -291,6 +323,7 @@ namespace ClaudiaIDE.Settings
                 case PositionV.Top:
                     return System.Windows.VerticalAlignment.Top;
             }
+
             return System.Windows.VerticalAlignment.Bottom;
         }
 
@@ -305,6 +338,7 @@ namespace ClaudiaIDE.Settings
                 case PositionH.Right:
                     return System.Windows.Media.AlignmentX.Right;
             }
+
             return System.Windows.Media.AlignmentX.Right;
         }
 
@@ -319,6 +353,7 @@ namespace ClaudiaIDE.Settings
                 case PositionH.Right:
                     return System.Windows.HorizontalAlignment.Right;
             }
+
             return System.Windows.HorizontalAlignment.Right;
         }
     }
