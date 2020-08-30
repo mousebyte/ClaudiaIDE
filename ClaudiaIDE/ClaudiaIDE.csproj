@@ -245,6 +245,7 @@
     <Compile Include="IImageLoader.cs" />
     <Compile Include="IImageProvider.cs" />
     <Compile Include="ImageProvider.cs" />
+    <Compile Include="Loaders\ImageFileList.cs" />
     <Compile Include="Loaders\ImageLoader.cs" />
     <Compile Include="Loaders\SingleImageLoader.cs" />
     <Compile Include="Loaders\SlideshowImageLoader.cs" />
