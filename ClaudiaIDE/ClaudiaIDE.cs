@@ -1,16 +1,14 @@
-using System.Windows.Controls;
-using System.Windows.Threading;
-using ClaudiaIDE.Helpers;
-using ClaudiaIDE.Settings;
-using Microsoft.VisualStudio.Text.Editor;
-using System.Collections.Generic;
-using System.Linq;
-using ClaudiaIDE.ImageProvider;
-using System.Windows.Media;
 using System;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using ClaudiaIDE.Settings;
+using Microsoft.VisualStudio.PlatformUI;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Text.Editor;
 
 namespace ClaudiaIDE
 {
@@ -19,216 +17,187 @@ namespace ClaudiaIDE
     /// </summary>
     public class ClaudiaIDE
     {
-        private readonly List<IImageProvider> _imageProviders;
-        private readonly IWpfTextView _view;
         private readonly IAdornmentLayer _adornmentLayer;
-        private Canvas _editorCanvas = new Canvas() { IsHitTestVisible = false };
-        private Setting _settings = Setting.Instance;
-        private IImageProvider _imageProvider;
+        private readonly Dictionary<int, DependencyObject> _defaultThemeColor = new Dictionary<int, DependencyObject>();
+        private readonly Canvas _editorCanvas = new Canvas {IsHitTestVisible = false};
+        private readonly Setting _settings = Setting.Instance;
+        private readonly IWpfTextView _view;
+        private bool _hasImage;
         private bool _isMainWindow;
-        private DependencyObject _wpfTextViewHost = null;
-        private Dictionary<int, DependencyObject> _defaultThemeColor = new Dictionary<int, DependencyObject>();
-        private bool _hasImage = false;
-        private bool _isRootWindow = false;
+        private bool _isRootWindow;
+        private Brush _transparentBrush;
+        private DependencyObject _wpfTextViewHost;
 
         /// <summary>
         /// Creates a square image and attaches an event handler to the layout changed event that
         /// adds the the square in the upper right-hand corner of the TextView via the adornment layer
         /// </summary>
         /// <param name="view">The <see cref="IWpfTextView"/> upon which the adornment will be drawn</param>
-        /// <param name="imageProvider">The <see cref="IImageProvider"/> which provides bitmaps to draw</param>
-        /// <param name="setting">The <see cref="Setting"/> contains user image preferences</param>
-        public ClaudiaIDE(IWpfTextView view, List<IImageProvider> imageProvider)
+        public ClaudiaIDE(IWpfTextView view)
         {
-            try
+            _view = view;
+            _adornmentLayer = view.GetAdornmentLayer("ClaudiaIDE");
+            view.LayoutChanged += OnViewLayoutChanged;
+            view.Closed += OnViewClosed;
+            view.BackgroundBrushChanged += OnViewBackgroundBrushChanged;
+            _settings.OnChanged.AddEventHandler(ReloadSettings);
+            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
+            ImageProvider.Instance.ProviderChanged += OnProviderChanged;
+            VSColorTheme.ThemeChanged += OnThemeChanged;
+            SetTransparentBrush();
+            ChangeImage();
+            RefreshAdornment();
+        }
+
+        private DependencyObject WpfTextViewHost
+        {
+            get
             {
-                _imageProviders = imageProvider;
-                _imageProvider = imageProvider.FirstOrDefault(x => x.ProviderType == _settings.ImageBackgroundType);
-
-                if (_imageProvider == null)
-                {
-                    _imageProvider = new SingleImageProvider(_settings);
-                }
-                _view = view;
-                _adornmentLayer = view.GetAdornmentLayer("ClaudiaIDE");
-                _view.LayoutChanged += (s, e) =>
-                {
-                    if (!_hasImage)
-                    {
-                        ChangeImage();
-                    }
-                    else
-                    {
-                        RefreshBackground();
-                    }
-                };
-                _view.Closed += (s, e) =>
-                {
-                    _imageProviders.ForEach(x => x.NewImageAvaliable -= InvokeChangeImage);
-                    if (_settings != null)
-                    {
-                        _settings.OnChanged.RemoveEventHandler(ReloadSettings);
-                    }
-                };
-                _view.BackgroundBrushChanged += (s, e) =>
-                {
-                    _hasImage = false;
-                    SetCanvasBackground();
-                };
-                _settings.OnChanged.AddEventHandler(ReloadSettings);
-
-                _imageProviders.ForEach(x => x.NewImageAvaliable += InvokeChangeImage);
-
-                SetCanvasBackground();
-                ChangeImage();
-                RefreshAdornment();
-            }
-            catch
-            {
+                if (_wpfTextViewHost != null) return _wpfTextViewHost;
+                _wpfTextViewHost = FindUI(_editorCanvas,
+                    _isRootWindow ? DependencyType.WpfTextView : DependencyType.WpfMultiViewHost);
+                if (_wpfTextViewHost != null)
+                    RenderOptions.SetBitmapScalingMode(_wpfTextViewHost, BitmapScalingMode.Fant);
+                return _wpfTextViewHost;
             }
         }
 
-        private void InvokeChangeImage(object sender, System.EventArgs e)
+        private void OnThemeChanged(ThemeChangedEventArgs e)
         {
-            try
-            {
-                Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
-                {
-                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    ChangeImage();
-                    GC.Collect();
-                });
-            }
-            catch
-            {
-            }
+            SetTransparentBrush();
+            SetCanvasBackground();
         }
 
-        private void ReloadSettings(object sender, System.EventArgs e)
+
+        private void SetTransparentBrush()
         {
-            _imageProvider = _imageProviders.FirstOrDefault(x => x.ProviderType == _settings.ImageBackgroundType);
+            var color = VSColorTheme.GetThemedColor(TreeViewColors.BackgroundColorKey);
+            _transparentBrush = new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+        }
+
+        private void OnProviderChanged(object sender, EventArgs e)
+        {
+            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
+            ChangeImage();
+        }
+
+        private void OnViewBackgroundBrushChanged(object s, BackgroundBrushChangedEventArgs e)
+        {
+            _hasImage = false;
+            SetCanvasBackground();
+        }
+
+        private void OnViewClosed(object s, EventArgs e)
+        {
+            ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
+            ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
+            _settings.OnChanged.RemoveEventHandler(ReloadSettings);
+        }
+
+        private void OnViewLayoutChanged(object s, TextViewLayoutChangedEventArgs e)
+        {
+            if (!_hasImage) ChangeImage();
+            else RefreshBackground();
+        }
+
+        private void InvokeChangeImage(object sender, EventArgs e)
+        {
+            ChangeImage();
+        }
+
+        private void ReloadSettings(object sender, EventArgs e)
+        {
             _hasImage = false;
             ChangeImage();
         }
 
         private void ChangeImage()
         {
-            try
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
+                var loadImageTask = ImageProvider.Instance.Loader.GetBitmapAsync();
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 SetCanvasBackground();
-                FindWpfTextView(_editorCanvas as DependencyObject);
-                if (_wpfTextViewHost == null) return;
+                if (WpfTextViewHost == null) return;
 
-                var newimage = _imageProvider.GetBitmap();
                 var opacity = _settings.ExpandToIDE && _isMainWindow ? 0.0 : _settings.Opacity;
-
-                Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
+                if (_isRootWindow)
                 {
-                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    try
+                    var grid = new Grid
                     {
-                        if (_isRootWindow)
+                        Name = "ClaudiaIdeImage",
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Stretch,
+                        IsHitTestVisible = false
+                    };
+                    var img = new Image
+                    {
+                        Source = await loadImageTask,
+                        Stretch = _settings.ImageStretch.ConvertTo(),
+                        HorizontalAlignment = _settings.PositionHorizon.ConvertToHorizontalAlignment(),
+                        VerticalAlignment = _settings.PositionVertical.ConvertToVerticalAlignment(),
+                        Opacity = opacity,
+                        IsHitTestVisible = false
+                    };
+                    grid.Children.Insert(0, img);
+                    Grid.SetRowSpan(grid, 3);
+                    Grid.SetColumnSpan(grid, 3);
+                    if (VisualTreeHelper.GetParent(WpfTextViewHost) is Grid p)
+                    {
+                        foreach (var c in p.Children)
                         {
-                            var grid = new Grid()
-                            {
-                                Name = "ClaudiaIdeImage",
-                                HorizontalAlignment = HorizontalAlignment.Stretch,
-                                VerticalAlignment = VerticalAlignment.Stretch,
-                                IsHitTestVisible = false
-                            };
-                            var ni = new Image()
-                            {
-                                Source = newimage,
-                                Stretch = _settings.ImageStretch.ConvertTo(),
-                                HorizontalAlignment = _settings.PositionHorizon.ConvertToHorizontalAlignment(),
-                                VerticalAlignment = _settings.PositionVertical.ConvertToVerticalAlignment(),
-                                Opacity = opacity,
-                                IsHitTestVisible = false
-                            };
-                            grid.Children.Insert(0, ni);
-                            Grid.SetRowSpan(grid, 3);
-                            Grid.SetColumnSpan(grid, 3);
-                            var p = VisualTreeHelper.GetParent(_wpfTextViewHost) as Grid;
-                            if(p != null)
-                            {
-                                foreach (var c in p.Children)
-                                {
-                                    if ((c as Grid)?.Name == "ClaudiaIdeImage")
-                                    {
-                                        p.Children.Remove(c as UIElement);
-                                        break;
-                                    }
-                                }
-                                p.Children.Insert(0, grid);
-                            }
-                       }
-                        else
-                        {
-                            var nib = new ImageBrush(newimage)
-                            {
-                                Stretch = _settings.ImageStretch.ConvertTo(),
-                                AlignmentX = _settings.PositionHorizon.ConvertTo(),
-                                AlignmentY = _settings.PositionVertical.ConvertTo(),
-                                Opacity = opacity,
-                                Viewbox = new Rect(new Point(_settings.ViewBoxPointX, _settings.ViewBoxPointY), new Size(1,1))
-                            };
-                            _wpfTextViewHost.SetValue(Panel.BackgroundProperty, nib);
+                            if ((c as Grid)?.Name != "ClaudiaIdeImage") continue;
+                            p.Children.Remove(c as UIElement);
+                            break;
                         }
-                        _hasImage = true;
-                        if (_settings.ImageBackgroundType == ImageBackgroundType.SingleEach)
-                            ((SingleImageEachProvider)_imageProvider).NextImage();
+
+                        p.Children.Insert(0, grid);
                     }
-                    catch
+                }
+                else
+                {
+                    var nib = new ImageBrush(await loadImageTask)
                     {
-                    }
-                });
-            }
-            catch
-            {
-            }
+                        Stretch = _settings.ImageStretch.ConvertTo(),
+                        AlignmentX = _settings.PositionHorizon.ConvertTo(),
+                        AlignmentY = _settings.PositionVertical.ConvertTo(),
+                        Opacity = opacity,
+                        Viewbox = new Rect(new Point(_settings.ViewBoxPointX, 0), new Size(1, 1))
+                    };
+                    _wpfTextViewHost.SetValue(Panel.BackgroundProperty, nib);
+                }
+
+                _hasImage = true;
+            }).FileAndForget("claudiaide/claudiaide/changeimage");
         }
 
         private void RefreshBackground()
         {
             SetCanvasBackground();
-            FindWpfTextView(_editorCanvas as DependencyObject);
-            if (_wpfTextViewHost == null) return;
+            if (WpfTextViewHost == null) return;
             var opacity = _settings.ExpandToIDE && _isMainWindow ? 0.0 : _settings.Opacity;
 
-            var refd = _wpfTextViewHost.GetType();
-            var prop = refd.GetProperty("Background");
-            var background = prop.GetValue(_wpfTextViewHost) as ImageBrush;
-            if (background == null && _isRootWindow)
+            var background = WpfTextViewHost.GetType()
+                .GetProperty("Background")
+                ?.GetValue(WpfTextViewHost) as ImageBrush;
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                if (background == null && _isRootWindow)
                 {
-                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    try
-                    {
-                        var c = (_wpfTextViewHost as UIElement).Opacity;
-                        (_wpfTextViewHost as UIElement).Opacity = c < 0.01 ? 0.01 : c - 0.01;
-                        (_wpfTextViewHost as UIElement).Opacity = c;
-                    }
-                    catch
-                    {
-                    }
-                });
-            }
-            else
-            {
-                Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
+                    var element = (UIElement) WpfTextViewHost;
+                    var c = element.Opacity;
+                    element.Opacity = c < 0.01 ? 0.01 : c - 0.01;
+                    element.Opacity = c;
+                }
+                else
                 {
-                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    try
-                    {
-                        background.Opacity = opacity < 0.01 ? 0.01 : opacity - 0.01;
-                        background.Opacity = opacity;
-                    }
-                    catch
-                    {
-                    }
-                });
-            }
+                    Debug.Assert(background != null, nameof(background) + " != null");
+                    background.Opacity = opacity < 0.01 ? 0.01 : opacity - 0.01;
+                    background.Opacity = opacity;
+                }
+            }).FileAndForget("claudiaide/claudiaide/refreshbackground");
         }
 
         private void RefreshAdornment()
@@ -241,174 +210,162 @@ namespace ClaudiaIDE
                 null);
         }
 
+
+        private static DependencyType GetDependencyType(DependencyObject obj)
+        {
+            var fullName = obj.GetType().FullName;
+            return fullName switch
+            {
+                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView" => DependencyType.WpfTextView,
+                "Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost" => DependencyType.WpfMultiViewHost,
+                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextViewHost" => DependencyType.WpfTextViewHost,
+                "Microsoft.VisualStudio.PlatformUI.MainWindow" => DependencyType.MainWindow,
+                "System.Windows.Controls.Grid" => DependencyType.Grid,
+                "System.Windows.Controls.Border" => DependencyType.Border,
+                _ => DependencyType.Other
+            };
+        }
+
+
         private void SetCanvasBackground()
         {
-            _isMainWindow = IsMainWindow();
+            GetViewType();
             var isTransparent = true;
             var current = _editorCanvas as DependencyObject;
-
+            var bottomGridBackgroundSet = false;
+            var bottomBorderBackgroundSet = false;
             while (current != null)
             {
-                var refd = current.GetType();
-                var nameprop = refd.GetProperty("Name");
-                var objname = nameprop?.GetValue(current) as string;
+                var objname = current.GetType().GetProperty("Name")?.GetValue(current) as string;
 
-                if (!string.IsNullOrEmpty(objname) && (objname.Equals("RootGrid", StringComparison.OrdinalIgnoreCase) || objname.Equals("MainWindow", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return;
-                }
+                if (!string.IsNullOrEmpty(objname) &&
+                    (objname.Equals("RootGrid", StringComparison.OrdinalIgnoreCase)
+                     || objname.Equals("MainWindow", StringComparison.OrdinalIgnoreCase))) return;
 
-                if (_isRootWindow && refd.FullName.Equals("Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView", StringComparison.OrdinalIgnoreCase))
+                switch (GetDependencyType(current))
                 {
-                    return;
-                }
-
-                if (refd.FullName.Equals("Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost", StringComparison.OrdinalIgnoreCase))
-                {
-                    isTransparent = _settings.ExpandToIDE && _isMainWindow;
-                }
-                else if (refd.FullName.Equals("Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView", StringComparison.OrdinalIgnoreCase))
-                {
-                    // for visualize history(using Gource)
-                    if (FindUI(current, "Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost") == null)
-                    {
+                    case DependencyType.WpfTextView when _isRootWindow:
+                    case DependencyType.WpfTextView
+                        when FindUI(current, DependencyType.WpfMultiViewHost) == null:
                         return;
-                    }
-                }
-                else
-                {
-                    SetBackgroundToTransparent(current, isTransparent);
+                    case DependencyType.WpfTextView:
+                        break;
+                    case DependencyType.Grid:
+                        if (!bottomGridBackgroundSet && _settings.ExpandToIDE)
+                        {
+                            SetSemiTransparentBackground(current);
+                            bottomGridBackgroundSet = true;
+                        }
+                        else
+                        {
+                            SetBackgroundToTransparent(current, true);
+                        }
+
+                        break;
+                    case DependencyType.Border:
+                        if (!bottomBorderBackgroundSet && _settings.ExpandToIDE)
+                        {
+                            SetSemiTransparentBackground(current);
+                            bottomBorderBackgroundSet = true;
+                        }
+                        else
+                        {
+                            SetBackgroundToTransparent(current, true);
+                        }
+
+                        break;
+                    case DependencyType.WpfMultiViewHost:
+                        isTransparent = false;
+                        break;
+                    default:
+                        SetBackgroundToTransparent(current, isTransparent);
+                        break;
                 }
 
-
-                if (current is Visual || current is Visual3D)
-                {
-                    current = VisualTreeHelper.GetParent(current);
-                }
-                else
-                {
-                    current = LogicalTreeHelper.GetParent(current);
-                }
+                current = current is Visual || current is Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
             }
         }
 
-        private bool IsMainWindow()
+        private void SetSemiTransparentBackground(DependencyObject obj)
         {
-            var initial = _view as DependencyObject;
-            var current = initial;
-            var result = initial;
-
-            while (current != null)
-            {
-                result = current;
-                if (current is Visual || current is Visual3D)
-                {
-                    current = VisualTreeHelper.GetParent(current);
-                }
-                else
-                {
-                    current = LogicalTreeHelper.GetParent(current);
-                }
-            }
-
-            if (result.GetType().FullName.Equals("Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost", StringComparison.OrdinalIgnoreCase) ||
-                result.GetType().FullName.Equals("Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextViewHost", StringComparison.OrdinalIgnoreCase))
-            {
-                // maybe editor with designer area or other view window
-                _isRootWindow = true;
-            }
-
-            if (result.GetType().FullName.Equals("Microsoft.VisualStudio.PlatformUI.MainWindow", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            var prop = obj.GetType().GetProperty("Background");
+            prop?.SetValue(obj, _transparentBrush);
         }
 
-        private void FindWpfTextView(DependencyObject d)
+        private void GetViewType()
         {
-            if (_wpfTextViewHost == null)
+            if (!(_view is DependencyObject parent))
+                throw new InvalidOperationException("Could not cast view to DependencyObject.");
+            DependencyObject current;
+
+            do
             {
-                if (_isRootWindow)
-                {
-                    _wpfTextViewHost = FindUI(d, "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView");
-                }
-                else
-                {
-                    _wpfTextViewHost = FindUI(d, "Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost");
-                }
-                Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
-                {
-                    await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    try
-                    {
-                        if (_wpfTextViewHost == null) return;
-                        RenderOptions.SetBitmapScalingMode(_wpfTextViewHost, BitmapScalingMode.Fant);
-                    }
-                    catch
-                    {
-                    }
-                });
-            }
+                current = parent;
+                parent = current is Visual || current is Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            } while (parent != null);
+
+            var type = GetDependencyType(current);
+
+            _isRootWindow = type == DependencyType.WpfMultiViewHost || type == DependencyType.WpfTextViewHost;
+            _isMainWindow = type == DependencyType.MainWindow;
+            // maybe editor with designer area or other view window
         }
 
-        private DependencyObject FindUI(DependencyObject d, string name)
+        private static DependencyObject FindUI(DependencyObject d, DependencyType type)
         {
             var current = d;
-
-            while (current != null)
+            do
             {
-                if (current.GetType().FullName.Equals(name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return current;
-                }
-                if (current is Visual || current is Visual3D)
-                {
-                    current = VisualTreeHelper.GetParent(current);
-                }
-                else
-                {
-                    current = LogicalTreeHelper.GetParent(current);
-                }
-            }
+                if (GetDependencyType(current) == type) return current;
+                current = current is Visual || current is Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            } while (current != null);
+
             return null;
         }
 
         private void SetBackgroundToTransparent(DependencyObject d, bool isTransparent)
         {
             var property = d.GetType().GetProperty("Background");
-            var current = property?.GetValue(d) as Brush;
-            if (current == null) return;
-
-            Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
+            if (!(property?.GetValue(d) is Brush brush)) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 try
                 {
+                    var hash = d.GetHashCode();
                     if (isTransparent)
                     {
-                        if (!_defaultThemeColor.Any(x => x.Key == d.GetHashCode()))
-                        {
-                            _defaultThemeColor[d.GetHashCode()] = current as DependencyObject;
-                        }
-                        property.SetValue(d, (Brush)Brushes.Transparent);
+                        if (!_defaultThemeColor.ContainsKey(hash))
+                            _defaultThemeColor[hash] = brush;
+                        property.SetValue(d, Brushes.Transparent);
                     }
-                    else
+                    else if (_defaultThemeColor.TryGetValue(hash, out var obj))
                     {
-                        var d1 = _defaultThemeColor.FirstOrDefault(x => x.Key == current.GetHashCode());
-                        if (d1.Value != null)
-                        {
-                            property.SetValue(d, (Brush)d1.Value);
-                        }
+                        property.SetValue(d, (Brush) obj);
                     }
                 }
-                catch
+                catch (Exception e)
                 {
+                    throw new InvalidOperationException("Error: SetBackgroundToTransparent failed.", e);
                 }
             });
+        }
+
+        private enum DependencyType
+        {
+            WpfTextView,
+            WpfMultiViewHost,
+            WpfTextViewHost,
+            MainWindow,
+            Grid,
+            Border,
+            Other
         }
     }
 }

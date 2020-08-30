@@ -1,5 +1,4 @@
 using System.ComponentModel.Composition;
-using ClaudiaIDE.ImageProvider;
 using ClaudiaIDE.Settings;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text.Editor;
@@ -20,7 +19,6 @@ namespace ClaudiaIDE
     [TextViewRole(PredefinedTextViewRoles.Document)]
     internal sealed class ClaudiaIDEAdornmentFactory : IWpfTextViewCreationListener
     {
-        private List<IImageProvider> ImageProviders;
 
         [Import(typeof(SVsServiceProvider))]
         internal System.IServiceProvider ServiceProvider { get; set; }
@@ -40,22 +38,14 @@ namespace ClaudiaIDE
         /// <param name="textView">The <see cref="IWpfTextView"/> upon which the adornment should be placed</param>
         public void TextViewCreated(IWpfTextView textView)
         {
-            var settings = Setting.Initialize(ServiceProvider);
-            if (ImageProviders == null)
+            if (ImageProvider.Instance == null)
             {
-                if (ProvidersHolder.Instance.Providers == null)
-                {
-                    ProvidersHolder.Initialize(settings, new List<IImageProvider>
-                    {
-                        new SingleImageEachProvider(settings),
-                        new SlideShowImageProvider(settings),
-                        new SingleImageProvider(settings)
-                    });
-                }
-                ImageProviders = ProvidersHolder.Instance.Providers;
+                if (Setting.Instance == null)
+                    Setting.Initialize(ServiceProvider);
+                ImageProvider.Initialize(Setting.Instance);
             }
 
-            new ClaudiaIDE(textView, ImageProviders);
+            new ClaudiaIDE(textView);
         }
     }
 
