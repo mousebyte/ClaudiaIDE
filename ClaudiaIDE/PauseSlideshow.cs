@@ -44,8 +44,6 @@ namespace ClaudiaIDE
             var resumeCommandID = new CommandID(CommandSet, ResumeCommandId);
             var pauseMenuItem = new OleMenuCommand(Execute, pauseCommandID);
             var resumeMenuItem = new OleMenuCommand(Execute, resumeCommandID);
-            UpdatePauseVisibility(pauseMenuItem);
-            UpdateResumeVisibility(resumeMenuItem);
             pauseMenuItem.BeforeQueryStatus += (sender, args) =>
             {
                 if (!(sender is OleMenuCommand cmd)) return;
@@ -83,6 +81,7 @@ namespace ClaudiaIDE
             cmd.Enabled = paused;
             cmd.Visible = paused;
         }
+
         /// <summary>
         /// Gets the instance of the command.
         /// </summary>
@@ -118,9 +117,8 @@ namespace ClaudiaIDE
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (!(ImageProvider.Instance.Loader is SlideshowImageLoader slideshow))
-                return;
-            slideshow.Paused = !slideshow.Paused;
+            if (ImageProvider.Instance.Loader is SlideshowImageLoader slideshow)
+                slideshow.Paused = !slideshow.Paused;
         }
     }
 }
