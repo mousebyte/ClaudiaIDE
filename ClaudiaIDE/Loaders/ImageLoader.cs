@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ClaudiaIDE.Helpers;
 using ClaudiaIDE.Settings;
 
 namespace ClaudiaIDE.Loaders
@@ -42,15 +43,19 @@ namespace ClaudiaIDE.Loaders
                     bitmap.UriSource = new Uri(path, UriKind.RelativeOrAbsolute);
                     bitmap.EndInit();
                     bitmap.Freeze();
+                    BitmapSource retBitmap;
                     if (Settings.ImageStretch == ImageStretch.None)
-                        bitmap = EnsureMaxWidthHeight(
-                            bitmap,
-                            Settings.MaxWidth,
-                            Settings.MaxHeight
-                        );
-                    return Math.Abs(bitmap.DpiX - 96) > 1 || Math.Abs(bitmap.DpiY - 96) > 1
-                        ? ConvertToDpi96(bitmap)
-                        : bitmap;
+                    {
+                        retBitmap = EnsureMaxWidthHeight(bitmap, Settings.MaxWidth, Settings.MaxHeight);
+                        if (Math.Abs(bitmap.Width - bitmap.PixelWidth) > 1 ||
+                            Math.Abs(bitmap.Height - bitmap.PixelHeight) > 1)
+                            retBitmap = ConvertToDpi96(retBitmap);
+                    }
+                    else retBitmap = bitmap;
+
+                    return Settings.SoftEdgeX > 0 || Settings.SoftEdgeY > 0
+                        ? Utils.SoftenEdges(retBitmap, Settings.SoftEdgeX, Settings.SoftEdgeY)
+                        : retBitmap;
                 },
                 CancellationToken.None,
                 TaskCreationOptions.None,
