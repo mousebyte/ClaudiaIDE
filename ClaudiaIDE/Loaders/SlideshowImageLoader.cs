@@ -41,7 +41,7 @@ namespace ClaudiaIDE.Loaders
 
         private void ReloadSettings(object sender, EventArgs e)
         {
-            if (Settings.ImageBackgroundType != ImageBackgroundType.Single) Setup();
+            if (Settings.ImageBackgroundType == ImageBackgroundType.Slideshow) Setup();
             else _timer.Change(Timeout.Infinite, Timeout.Infinite);
         }
 
@@ -53,6 +53,7 @@ namespace ClaudiaIDE.Loaders
                 Settings.LoopSlideshow,
                 Settings.ShuffleSlideshow
             );
+            Paused = false;
             _timer.Change(0, (int) Settings.UpdateImageInterval.TotalMilliseconds);
             InvokeImageChanged();
         }

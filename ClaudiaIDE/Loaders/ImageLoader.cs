@@ -58,7 +58,7 @@ namespace ClaudiaIDE.Loaders
             );
         }
 
-        private static BitmapSource ConvertToDpi96(BitmapImage image)
+        private static BitmapSource ConvertToDpi96(BitmapSource image)
         {
             const int dpi = 96;
             var width = image.PixelWidth;
