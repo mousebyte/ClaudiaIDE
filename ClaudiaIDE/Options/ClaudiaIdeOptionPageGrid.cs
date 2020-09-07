@@ -155,8 +155,10 @@ namespace ClaudiaIDE.Options
         public double ViewBoxPointY { get; set; }*/
 
 
+        /*
         protected override void OnApply(PageApplyEventArgs e)
         {
+            base.OnApply(e);
             try
             {
                 //e.ApplyBehavior = ApplyKind.CancelNoNavigate;
@@ -165,8 +167,7 @@ namespace ClaudiaIDE.Options
             catch
             {
             }
-            base.OnApply(e);
-        }
+        }*/
     }
 
     public class ImageBackgroundTypeConverter : EnumConverter
