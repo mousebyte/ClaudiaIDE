@@ -39,8 +39,8 @@ namespace ClaudiaIDE
             await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             Application.Current.MainWindow.Loaded += (s, e) =>
             {
-                _mainWindow = (System.Windows.Window) s;
-                _settings = Setting.Initialize(this);
+                _mainWindow = (System.Windows.Window)s;
+                _settings = Setting.Instance;
                 _settings.OnChanged.AddEventHandler(ReloadSettings);
                 if (ProvidersHolder.Instance.Providers == null)
                 {
@@ -74,7 +74,7 @@ namespace ClaudiaIDE
                 try
                 {
                     await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-                    _settings = await Setting.InitializeAsync(this);
+                    _settings = await Setting.GetLiveInstanceAsync();
                     if (_settings == null) return;
                     _mainWindow = (System.Windows.Window) Application.Current.MainWindow;
                     _settings.OnChanged.AddEventHandler(ReloadSettings);

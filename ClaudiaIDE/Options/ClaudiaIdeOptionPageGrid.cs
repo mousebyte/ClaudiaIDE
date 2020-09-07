@@ -17,8 +17,11 @@ namespace ClaudiaIDE.Options
     [Guid("441f0a76-1771-41c2-817c-81b8b03fb0e8")]
     public class ClaudiaIdeOptionPageGrid : DialogPage
     {
+        private Setting _model;
+
         public ClaudiaIdeOptionPageGrid()
         {
+            _model = ThreadHelper.JoinableTaskFactory.Run(Setting.CreateAsync);/*
             BackgroundImageAbsolutePath = "Images\\background.png";
             BackgroundImageDirectoryAbsolutePath = "Images";
             Opacity = 0.35;
@@ -34,9 +37,21 @@ namespace ClaudiaIDE.Options
 			ImageStretch = ImageStretch.None;
             ExpandToIDE = false;
             ViewBoxPointX = 0;
-            ViewBoxPointY = 0;
+            ViewBoxPointY = 0;*/
         }
 
+        public override object AutomationObject => _model;
+        public override void LoadSettingsFromStorage()
+        {
+            _model.Load();
+        }
+
+        public override void SaveSettingsToStorage()
+        {
+            _model.Save();
+        }
+
+        /*
         [LocalManager.LocalizedCategory("Image")]
         [LocalManager.LocalizedDisplayName("BackgroundType")]
         [LocalManager.LocalizedDescription("BackgroundTypeDes")]
@@ -137,7 +152,7 @@ namespace ClaudiaIDE.Options
         [LocalManager.LocalizedCategoryAttribute("Layout")]
         [LocalManager.LocalizedDisplayName("ViewBoxPointY")]
         [LocalManager.LocalizedDescription("ViewBoxPointYDes")]
-        public double ViewBoxPointY { get; set; }
+        public double ViewBoxPointY { get; set; }*/
 
 
         protected override void OnApply(PageApplyEventArgs e)
