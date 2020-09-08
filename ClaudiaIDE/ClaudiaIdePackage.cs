@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -64,6 +66,20 @@ namespace ClaudiaIDE
             });
         }
 
+        private static void SetDockTargetBackgrounds(IEnumerable<DependencyObject> dockTargets)
+        {
+            foreach (var docktarget in dockTargets)
+            {
+                var grids = docktarget.Descendants<Grid>();
+                foreach (var g in grids)
+                {
+                    if (g == null) continue;
+                    var prop = g.GetType().GetProperty("Background");
+                    if (!(prop?.GetValue(g) is SolidColorBrush bg) || bg.Color.A == 0x00) continue;
+                    prop.SetValue(g, new SolidColorBrush(Color.FromArgb(0, bg.Color.R, bg.Color.G, bg.Color.B)));
+                }
+            }
+        }
 
         private async Task ChangeImageAsync()
         {
@@ -100,23 +116,7 @@ namespace ClaudiaIDE
 
                 var docktargets = rRootGrid.Descendants<DependencyObject>().Where(x =>
                     x.GetType().FullName == "Microsoft.VisualStudio.PlatformUI.Shell.Controls.DockTarget");
-                foreach (var docktarget in docktargets)
-                {
-                    var grids = docktarget.Descendants<Grid>();
-                    foreach (var g in grids)
-                    {
-                        if (g == null) continue;
-                        var prop = g.GetType().GetProperty("Background");
-                        if (!(prop?.GetValue(g) is SolidColorBrush bg) || bg.Color.A == 0x00) continue;
-                        prop.SetValue(g, new SolidColorBrush(new Color
-                        {
-                            A = 0x00,
-                            B = bg.Color.B,
-                            G = bg.Color.G,
-                            R = bg.Color.R
-                        }));
-                    }
-                }
+                SetDockTargetBackgrounds(docktargets);
             }
             else
             {
