@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ClaudiaIDE.Helpers;
 using ClaudiaIDE.Settings;
@@ -14,15 +13,17 @@ namespace ClaudiaIDE.Loaders
     {
         protected readonly Setting Settings;
 
-        public ImageBackgroundType BackgroundType { get; }
-
         protected ImageLoader(Setting settings, ImageBackgroundType type)
         {
             Settings = settings;
             BackgroundType = type;
         }
 
+        public ImageBackgroundType BackgroundType { get; }
+
         public abstract Task<BitmapSource> GetBitmapAsync();
+
+        public event EventHandler ImageChanged;
 
         protected void InvokeImageChanged()
         {
@@ -51,7 +52,10 @@ namespace ClaudiaIDE.Loaders
                             Math.Abs(bitmap.Height - bitmap.PixelHeight) > 1)
                             retBitmap = ConvertToDpi96(retBitmap);
                     }
-                    else retBitmap = bitmap;
+                    else
+                    {
+                        retBitmap = bitmap;
+                    }
 
                     return Settings.SoftEdgeX > 0 || Settings.SoftEdgeY > 0
                         ? Utils.SoftenEdges(retBitmap, Settings.SoftEdgeX, Settings.SoftEdgeY)
@@ -104,8 +108,5 @@ namespace ClaudiaIDE.Loaders
             bitmap.Freeze();
             return bitmap;
         }
-
-        /// <inheritdoc />
-        public event EventHandler ImageChanged;
     }
 }
