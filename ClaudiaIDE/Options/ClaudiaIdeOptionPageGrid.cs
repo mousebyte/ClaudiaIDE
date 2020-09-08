@@ -17,140 +17,22 @@ namespace ClaudiaIDE.Options
     [Guid("441f0a76-1771-41c2-817c-81b8b03fb0e8")]
     public class ClaudiaIdeOptionPageGrid : DialogPage
     {
+        private Setting _model;
+
         public ClaudiaIdeOptionPageGrid()
         {
-            BackgroundImageAbsolutePath = "Images\\background.png";
-            BackgroundImageDirectoryAbsolutePath = "Images";
-            Opacity = 0.35;
-            PositionHorizon = PositionH.Right;
-            PositionVertical = PositionV.Bottom;
-            UpdateImageInterval = TimeSpan.FromMinutes(1);
-            Extensions = ".png, .jpg, .gif, .bmp";
-            LoopSlideshow = true;
-            MaxWidth = 0;
-            MaxHeight = 0;
-            SoftEdgeX = 0;
-            SoftEdgeY = 0;
-			ImageStretch = ImageStretch.None;
-            ExpandToIDE = false;
-            ViewBoxPointX = 0;
-            ViewBoxPointY = 0;
+            _model = ThreadHelper.JoinableTaskFactory.Run(Setting.CreateAsync);
         }
 
-        [LocalManager.LocalizedCategory("Image")]
-        [LocalManager.LocalizedDisplayName("BackgroundType")]
-        [LocalManager.LocalizedDescription("BackgroundTypeDes")]
-        [PropertyPageTypeConverter(typeof(ImageBackgroundTypeConverter))]
-        [TypeConverter(typeof(ImageBackgroundTypeConverter))]
-        public ImageBackgroundType ImageBackgroundType { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Image")]
-        [LocalManager.LocalizedDisplayName("OpacityType")]
-        [LocalManager.LocalizedDescription("OpacityTypeDes")]
-        public double Opacity { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("HorizontalAlignmentType")]
-        [LocalManager.LocalizedDescription("HorizontalAlignmentTypeDes")]
-        [PropertyPageTypeConverter(typeof(PositionHTypeConverter))]
-        [TypeConverter(typeof(PositionHTypeConverter))]
-        public PositionH PositionHorizon { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("VerticalAlignmentType")]
-        [LocalManager.LocalizedDescription("VerticalAlignmentTypeDes")]
-        [PropertyPageTypeConverter(typeof(PositionVTypeConverter))]
-        [TypeConverter(typeof(PositionVTypeConverter))]
-        public PositionV PositionVertical { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
-        [LocalManager.LocalizedDisplayName("DirectoryPathType")]
-        [LocalManager.LocalizedDescription("DirectoryPathTypeDes")]
-        [EditorAttribute(typeof(BrowseDirectory), typeof(UITypeEditor))]
-        public string BackgroundImageDirectoryAbsolutePath { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
-        [LocalManager.LocalizedDisplayName("UpdateIntervalType")]
-        [LocalManager.LocalizedDescription("UpdateIntervalTypeDes")]
-        [PropertyPageTypeConverter(typeof(TimeSpanConverter))]
-        [TypeConverter(typeof(TimeSpanConverter))]
-        public TimeSpan UpdateImageInterval { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
-        [LocalManager.LocalizedDisplayName("ImageExtensionsType")]
-        [LocalManager.LocalizedDescription("ImageExtensionsTypeDes")]
-        public string Extensions { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("SingleImage")]
-        [LocalManager.LocalizedDisplayName("FilePathType")]
-        [LocalManager.LocalizedDescription("FilePathTypeDes")]
-        [EditorAttribute(typeof(BrowseFile), typeof(UITypeEditor))]
-        public string BackgroundImageAbsolutePath { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
-        [LocalManager.LocalizedDisplayName("LoopSlideshowType")]
-        [LocalManager.LocalizedDescription("LoopSlideshowTypeDes")]
-        public bool LoopSlideshow { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
-        [LocalManager.LocalizedDisplayName("ShuffleSlideshowType")]
-        [LocalManager.LocalizedDescription("ShuffleSlideshowTypeDes")]
-        public bool ShuffleSlideshow { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("ExpandToIDEType")]
-        [LocalManager.LocalizedDescription("ExpandToIDETypeDes")]
-        public bool ExpandToIDE { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("MaxWidthType")]
-        [LocalManager.LocalizedDescription("MaxWidthTypeDes")]
-        public int MaxWidth { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("MaxHeightType")]
-        [LocalManager.LocalizedDescription("MaxHeightTypeDes")]
-        public int MaxHeight { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("SoftEdgeX")]
-        [LocalManager.LocalizedDescription("SoftEdgeDes")]
-        public int SoftEdgeX { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("SoftEdgeY")]
-        [LocalManager.LocalizedDescription("SoftEdgeDes")]
-        public int SoftEdgeY { get; set; }
-
-		[LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("ImageStretchType")]
-        [LocalManager.LocalizedDescription("ImageStretchTypeDes")]
-        [PropertyPageTypeConverter(typeof(ImageStretchTypeConverter))]
-        [TypeConverter(typeof(ImageStretchTypeConverter))]
-        public ImageStretch ImageStretch { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("ViewBoxPointX")]
-        [LocalManager.LocalizedDescription("ViewBoxPointXDes")]
-        public double ViewBoxPointX { get; set; }
-
-        [LocalManager.LocalizedCategoryAttribute("Layout")]
-        [LocalManager.LocalizedDisplayName("ViewBoxPointY")]
-        [LocalManager.LocalizedDescription("ViewBoxPointYDes")]
-        public double ViewBoxPointY { get; set; }
-
-
-        protected override void OnApply(PageApplyEventArgs e)
+        public override object AutomationObject => _model;
+        public override void LoadSettingsFromStorage()
         {
-            try
-            {
-                //e.ApplyBehavior = ApplyKind.CancelNoNavigate;
-                Setting.Instance.OnApplyChanged();
-            }
-            catch
-            {
-            }
-            base.OnApply(e);
+            _model.Load();
+        }
+
+        public override void SaveSettingsToStorage()
+        {
+            _model.Save();
         }
     }
 

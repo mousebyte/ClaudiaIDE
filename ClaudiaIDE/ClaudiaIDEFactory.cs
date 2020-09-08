@@ -40,8 +40,6 @@ namespace ClaudiaIDE
         {
             if (ImageProvider.Instance == null)
             {
-                if (Setting.Instance == null)
-                    Setting.Initialize(ServiceProvider);
                 ImageProvider.Initialize(Setting.Instance);
             }
 

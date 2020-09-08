@@ -1,240 +1,255 @@
 using System;
+/*
+ * Implementation based on https://github.com/madskristensen/OptionsSample
+ */
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Drawing.Design;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
-using EnvDTE;
-using EnvDTE80;
+using ClaudiaIDE.Localized;
+using ClaudiaIDE.Options;
+using Microsoft;
+using Microsoft.VisualStudio.Settings;
+using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Shell.Settings;
 using Microsoft.VisualStudio.Threading;
+using Newtonsoft.Json;
+using AsyncServiceProvider = Microsoft.VisualStudio.Shell.AsyncServiceProvider;
 using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
+
 
 namespace ClaudiaIDE.Settings
 {
     public class Setting
     {
-        private static AsyncLazy<Setting> _liveModel =
+        private static readonly AsyncLazy<Setting> LiveModel =
             new AsyncLazy<Setting>(CreateAsync, ThreadHelper.JoinableTaskFactory);
 
-        private static AsyncLazy<ShellSettingsManager> _settingsManager =
+        private static readonly AsyncLazy<ShellSettingsManager> SettingsManager =
             new AsyncLazy<ShellSettingsManager>(GetSettingsManagerAsync, ThreadHelper.JoinableTaskFactory);
 
-        private static readonly Setting instance = new Setting();
-        private static readonly string CONFIGFILE = "config.txt";
-        private const string DefaultBackgroundImage = "Images\\background.png";
-        private const string DefaultBackgroundFolder = "Images";
+        private static readonly string DefaultBackgroundImage;
+        private static readonly string DefaultBackgroundFolder;
 
-        internal System.IServiceProvider ServiceProvider { get; set; }
+        private static readonly string CollectionName = typeof(Setting).FullName;
 
         public WeakEvent<EventArgs> OnChanged = new WeakEvent<EventArgs>();
 
-        public static Setting Instance
+        public static Task<Setting> GetLiveInstanceAsync() => LiveModel.GetValueAsync();
+
+        private static async Task<ShellSettingsManager> GetSettingsManagerAsync()
         {
-            get { return instance; }
-        }
-
-        public Setting()
-        {
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            BackgroundImagesDirectoryAbsolutePath =
-                Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, DefaultBackgroundFolder);
-            BackgroundImageAbsolutePath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
-                DefaultBackgroundImage);
-            Opacity = 0.35;
-            PositionHorizon = PositionH.Right;
-            PositionVertical = PositionV.Bottom;
-            ImageStretch = ImageStretch.None;
-            UpdateImageInterval = TimeSpan.FromMinutes(30);
-            ImageFadeAnimationInterval = TimeSpan.FromSeconds(0);
-            Extensions = ".png, .jpg";
-            ImageBackgroundType = ImageBackgroundType.Single;
-            LoopSlideshow = true;
-            ShuffleSlideshow = false;
-            MaxWidth = 0;
-            MaxHeight = 0;
-            SoftEdgeX = 0;
-            SoftEdgeY = 0;
-            ExpandToIDE = false;
-            ViewBoxPointX = 0;
-            ViewBoxPointY = 0;
-        }
-
-        public ImageBackgroundType ImageBackgroundType { get; set; }
-        public double Opacity { get; set; }
-        public PositionV PositionVertical { get; set; }
-        public PositionH PositionHorizon { get; set; }
-        public int MaxWidth { get; set; }
-        public int MaxHeight { get; set; }
-        public int SoftEdgeX { get; set; }
-        public int SoftEdgeY { get; set; }
-
-        public string BackgroundImageAbsolutePath { get; set; }
-
-        public TimeSpan UpdateImageInterval { get; set; }
-        public TimeSpan ImageFadeAnimationInterval { get; set; }
-        public string BackgroundImagesDirectoryAbsolutePath { get; set; }
-        public string Extensions { get; set; }
-        public bool LoopSlideshow { get; set; }
-        public bool ShuffleSlideshow { get; set; }
-        public ImageStretch ImageStretch { get; set; }
-        public bool ExpandToIDE { get; set; }
-        public double ViewBoxPointX { get; set; }
-        public double ViewBoxPointY { get; set; }
-
-        public void Serialize()
-        {
-            var config = JsonSerializer<Setting>.Serialize(this);
-
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var configpath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, CONFIGFILE);
-
-            using (var s = new StreamWriter(configpath, false, Encoding.ASCII))
-            {
-                s.Write(config);
-                s.Close();
-            }
-        }
-
-        public static Setting Initialize(IServiceProvider serviceProvider)
-        {
-            var settings = Setting.Instance;
-            if (settings.ServiceProvider != serviceProvider)
-            {
-                settings.ServiceProvider = serviceProvider;
-            }
-
-            try
-            {
-                settings.Load();
-            }
-            catch
-            {
-                return Setting.Deserialize();
-            }
-
-            return settings;
-        }
-
-        public static async Task<Setting> InitializeAsync(IServiceProvider serviceProvider)
-        {
-            var settings = Setting.Instance;
-            if (settings.ServiceProvider != serviceProvider)
-            {
-                settings.ServiceProvider = serviceProvider;
-            }
-
-            try
-            {
-                await settings.LoadAsync();
-            }
-            catch
-            {
-                return Setting.Deserialize();
-            }
-
-            return settings;
-        }
-
-        public static async Task<ShellSettingsManager> GetSettingsManagerAsync()
-        {
-
+            var svc =
+                await AsyncServiceProvider.GlobalProvider.GetServiceAsync(typeof(SVsSettingsManager)) as
+                    IVsSettingsManager;
+            Assumes.Present(svc);
+            return new ShellSettingsManager(svc);
         }
 
         public static async Task<Setting> CreateAsync()
         {
-            var instance = new Setting();
-            await instance.LoadAsync();
-            return instance;
+            var inst = new Setting();
+            await inst.LoadAsync();
+            return inst;
+        }
+
+        private IEnumerable<PropertyInfo> GetOptionProperties()
+        {
+            return GetType().GetProperties().Where(p => p.PropertyType.IsSerializable && p.PropertyType.IsPublic);
+        }
+
+        public static Setting Instance
+        {
+            get
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                return ThreadHelper.JoinableTaskFactory.Run(GetLiveInstanceAsync);
+            }
+        }
+
+        static Setting()
+        {
+            var assemblylocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            DefaultBackgroundFolder =
+                Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, "Images");
+            DefaultBackgroundImage = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
+                DefaultBackgroundImage);
+        }
+
+        private Setting() { }
+
+        [LocalManager.LocalizedCategory("Image")]
+        [LocalManager.LocalizedDisplayName("BackgroundType")]
+        [LocalManager.LocalizedDescription("BackgroundTypeDes")]
+        [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(ImageBackgroundTypeConverter))]
+        [TypeConverter(typeof(ImageBackgroundTypeConverter))]
+        public ImageBackgroundType ImageBackgroundType { get; set; } = ImageBackgroundType.Single;
+
+        [LocalManager.LocalizedCategory("Image")]
+        [LocalManager.LocalizedDisplayName("OpacityType")]
+        [LocalManager.LocalizedDescription("OpacityTypeDes")]
+        public double Opacity { get; set; } = 0.35d;
+
+        [LocalManager.LocalizedCategoryAttribute("Layout")]
+        [LocalManager.LocalizedDisplayName("VerticalAlignmentType")]
+        [LocalManager.LocalizedDescription("VerticalAlignmentTypeDes")]
+        [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(PositionVTypeConverter))]
+        [TypeConverter(typeof(PositionVTypeConverter))]
+        public PositionV PositionVertical { get; set; } = PositionV.Bottom;
+
+        [LocalManager.LocalizedCategoryAttribute("Layout")]
+        [LocalManager.LocalizedDisplayName("HorizontalAlignmentType")]
+        [LocalManager.LocalizedDescription("HorizontalAlignmentTypeDes")]
+        [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(PositionHTypeConverter))]
+        [TypeConverter(typeof(PositionHTypeConverter))]
+        public PositionH PositionHorizon { get; set; } = PositionH.Right;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("MaxWidthType")]
+        [LocalManager.LocalizedDescription("MaxWidthTypeDes")]
+        public int MaxWidth { get; set; } = 0;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("MaxHeightType")]
+        [LocalManager.LocalizedDescription("MaxHeightTypeDes")]
+        public int MaxHeight { get; set; } = 0;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("SoftEdgeX")]
+        [LocalManager.LocalizedDescription("SoftEdgeDes")]
+        public int SoftEdgeX { get; set; } = 0;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("SoftEdgeY")]
+        [LocalManager.LocalizedDescription("SoftEdgeDes")]
+        public int SoftEdgeY { get; set; } = 0;
+
+        [LocalManager.LocalizedCategory("SingleImage")]
+        [LocalManager.LocalizedDisplayName("FilePathType")]
+        [LocalManager.LocalizedDescription("FilePathTypeDes")]
+        [EditorAttribute(typeof(BrowseFile), typeof(UITypeEditor))]
+        public string BackgroundImageAbsolutePath { get; set; } = DefaultBackgroundImage;
+
+        [LocalManager.LocalizedCategory("Slideshow")]
+        [LocalManager.LocalizedDisplayName("UpdateIntervalType")]
+        [LocalManager.LocalizedDescription("UpdateIntervalTypeDes")]
+        [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(TimeSpanConverter))]
+        [TypeConverter(typeof(TimeSpanConverter))]
+        public TimeSpan UpdateImageInterval { get; set; } = TimeSpan.FromMinutes(30);
+
+        public TimeSpan ImageFadeAnimationInterval { get; set; } = TimeSpan.FromSeconds(0);
+
+        [LocalManager.LocalizedCategory("Slideshow")]
+        [LocalManager.LocalizedDisplayName("DirectoryPathType")]
+        [LocalManager.LocalizedDescription("DirectoryPathTypeDes")]
+        [EditorAttribute(typeof(BrowseDirectory), typeof(UITypeEditor))]
+        public string BackgroundImagesDirectoryAbsolutePath { get; set; } = DefaultBackgroundFolder;
+
+        [LocalManager.LocalizedCategory("Slideshow")]
+        [LocalManager.LocalizedDisplayName("ImageExtensionsType")]
+        [LocalManager.LocalizedDescription("ImageExtensionsTypeDes")]
+        public string Extensions { get; set; } = ".png, .jpg";
+
+        [LocalManager.LocalizedCategory("Slideshow")]
+        [LocalManager.LocalizedDisplayName("LoopSlideshowType")]
+        [LocalManager.LocalizedDescription("LoopSlideshowTypeDes")]
+        public bool LoopSlideshow { get; set; } = true;
+
+        [LocalManager.LocalizedCategoryAttribute("Slideshow")]
+        [LocalManager.LocalizedDisplayName("ShuffleSlideshowType")]
+        [LocalManager.LocalizedDescription("ShuffleSlideshowTypeDes")]
+        public bool ShuffleSlideshow { get; set; } = true;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("ImageStretchType")]
+        [LocalManager.LocalizedDescription("ImageStretchTypeDes")]
+        [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(ImageStretchTypeConverter))]
+        [TypeConverter(typeof(ImageStretchTypeConverter))]
+        public ImageStretch ImageStretch { get; set; } = ImageStretch.None;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("ExpandToIDEType")]
+        [LocalManager.LocalizedDescription("ExpandToIDETypeDes")]
+        public bool ExpandToIDE { get; set; } = false;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("ViewBoxPointX")]
+        [LocalManager.LocalizedDescription("ViewBoxPointXDes")]
+        public double ViewBoxPointX { get; set; } = 0;
+
+        [LocalManager.LocalizedCategory("Layout")]
+        [LocalManager.LocalizedDisplayName("ViewBoxPointY")]
+        [LocalManager.LocalizedDescription("ViewBoxPointYDes")]
+        public double ViewBoxPointY { get; set; } = 0;
+
+
+        public async Task SaveAsync()
+        {
+            var manager = await SettingsManager.GetValueAsync();
+            var settingsStore = manager.GetWritableSettingsStore(SettingsScope.UserSettings);
+            if (!settingsStore.CollectionExists(CollectionName))
+            {
+                settingsStore.CreateCollection(CollectionName);
+            }
+
+            foreach (var property in GetOptionProperties())
+            {
+                var output = JsonConvert.SerializeObject(property.GetValue(this));
+                settingsStore.SetString(CollectionName, property.Name, output);
+            }
+
+            var liveModel = await GetLiveInstanceAsync();
+
+            if (this != liveModel)
+            {
+                await liveModel.LoadAsync();
+                liveModel.OnApplyChanged();
+            }
         }
 
         public async Task LoadAsync()
         {
-            Microsoft.VisualStudio.Shell.IAsyncServiceProvider asyncServiceProvider =
-                await ((Microsoft.VisualStudio.Shell.AsyncPackage) ServiceProvider).GetServiceAsync(
-                        typeof(Microsoft.VisualStudio.Shell.Interop.SAsyncServiceProvider)) as
-                    Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
-            var testService = await asyncServiceProvider.GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
-            var props = testService.Properties["ClaudiaIDE", "General"];
+            var manager = await SettingsManager.GetValueAsync();
+            var settingsStore = manager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
+            if (!settingsStore.CollectionExists(CollectionName))
+            {
+                return;
+            }
 
-            Load(props);
-        }
 
-        private void Load(Properties props)
-        {
-            BackgroundImagesDirectoryAbsolutePath =
-                Setting.ToFullPath((string) props.Item("BackgroundImageDirectoryAbsolutePath").Value,
-                    DefaultBackgroundFolder);
-            BackgroundImageAbsolutePath = Setting.ToFullPath((string) props.Item("BackgroundImageAbsolutePath").Value,
-                DefaultBackgroundImage);
-            Opacity = (double) props.Item("Opacity").Value;
-            PositionHorizon = (PositionH) props.Item("PositionHorizon").Value;
-            PositionVertical = (PositionV) props.Item("PositionVertical").Value;
-            ImageStretch = (ImageStretch) props.Item("ImageStretch").Value;
-            UpdateImageInterval = (TimeSpan) props.Item("UpdateImageInterval").Value;
-            Extensions = (string) props.Item("Extensions").Value;
-            ImageBackgroundType = (ImageBackgroundType) props.Item("ImageBackgroundType").Value;
-            LoopSlideshow = (bool) props.Item("LoopSlideshow").Value;
-            ShuffleSlideshow = (bool) props.Item("ShuffleSlideshow").Value;
-            MaxWidth = (int) props.Item("MaxWidth").Value;
-            MaxHeight = (int) props.Item("MaxHeight").Value;
-            SoftEdgeX = (int) props.Item("SoftEdgeX").Value;
-            SoftEdgeY = (int) props.Item("SoftEdgeY").Value;
-            ExpandToIDE = (bool) props.Item("ExpandToIDE").Value;
-            ViewBoxPointX = (double) props.Item("ViewBoxPointX").Value;
-            ViewBoxPointY = (double) props.Item("ViewBoxPointY").Value;
+            foreach (var property in GetOptionProperties())
+            {
+                try
+                {
+                    var serializedProp = settingsStore.GetString(CollectionName, property.Name);
+                    var value = JsonConvert.DeserializeObject(serializedProp, property.PropertyType,
+                        new JsonSerializerSettings());
+                    property.SetValue(this, value);
+                }
+                catch (Exception e)
+                {
+                    System.Diagnostics.Debug.Write(e);
+                }
+            }
         }
 
         public void Load()
         {
-            var _DTE2 = (DTE2) ServiceProvider.GetService(typeof(DTE));
-            var props = _DTE2.Properties["ClaudiaIDE", "General"];
-
-            Load(props);
+            ThreadHelper.JoinableTaskFactory.Run(LoadAsync);
         }
 
-        public void OnApplyChanged()
+        public void Save()
         {
-            try
-            {
-                Load();
-                OnChanged?.RaiseEvent(this, EventArgs.Empty);
-            }
-            catch { }
+            ThreadHelper.JoinableTaskFactory.Run(SaveAsync);
         }
 
-        public static Setting Deserialize()
+        private void OnApplyChanged()
         {
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var configpath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, CONFIGFILE);
-            string config = "";
-
-            using (var s = new StreamReader(configpath, Encoding.ASCII, false))
-            {
-                config = s.ReadToEnd();
-                s.Close();
-            }
-
-            var ret = JsonSerializer<Setting>.DeSerialize(config);
-            ret.BackgroundImageAbsolutePath = ToFullPath(ret.BackgroundImageAbsolutePath, DefaultBackgroundImage);
-            ret.BackgroundImagesDirectoryAbsolutePath =
-                ToFullPath(ret.BackgroundImagesDirectoryAbsolutePath, DefaultBackgroundFolder);
-            return ret;
-        }
-
-        public static string ToFullPath(string path, string defaultPath)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                path = defaultPath;
-            }
-
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            if (!Path.IsPathRooted(path))
-            {
-                path = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, path);
-            }
-
-            return path;
+            OnChanged?.RaiseEvent(this, EventArgs.Empty);
         }
     }
 

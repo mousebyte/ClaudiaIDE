@@ -5,7 +5,7 @@ using ClaudiaIDE.Settings;
 using Microsoft.VisualStudio.Shell;
 using Task = System.Threading.Tasks.Task;
 
-namespace ClaudiaIDE
+namespace ClaudiaIDE.MenuCommands
 {
     /// <summary>
     /// Command handler

@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ClaudiaIDE.Helpers;
+using ClaudiaIDE.MenuCommands;
 using ClaudiaIDE.Options;
 using ClaudiaIDE.Settings;
 using Microsoft.VisualStudio.Shell;
@@ -35,7 +36,7 @@ namespace ClaudiaIDE
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             await NextImage.InitializeAsync(this);
             await PauseSlideshow.InitializeAsync(this);
-            _settings = await Setting.InitializeAsync(this);
+            _settings = await Setting.GetLiveInstanceAsync();
             Debug.Assert(Application.Current.MainWindow != null,
                 "Application.Current.MainWindow != null");
             _mainWindow = Application.Current.MainWindow;
