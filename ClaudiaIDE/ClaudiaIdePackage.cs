@@ -30,6 +30,7 @@ namespace ClaudiaIDE
     {
         private Setting _settings;
         private Window _mainWindow;
+        private Grid _rootGrid;
         private Image _current;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken,
@@ -58,6 +59,8 @@ namespace ClaudiaIDE
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 _settings.OnChanged.AddEventHandler(ReloadSettings);
+                //root grid shouldn't change
+                _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
                 Debug.Assert(ImageProvider.Instance != null,
                     "ImageProvider.Instance != null");
                 ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
@@ -66,7 +69,15 @@ namespace ClaudiaIDE
             });
         }
 
-        private static void SetDockTargetBackgrounds(IEnumerable<DependencyObject> dockTargets)
+        private const string DockTargetName = "Microsoft.VisualStudio.PlatformUI.Shell.Controls.DockTarget";
+
+        private IEnumerable<DependencyObject> GetDockTargets()
+        {
+            return _rootGrid.Descendants<DependencyObject>().Where(x =>
+                x.GetType().FullName?.Equals(DockTargetName, StringComparison.OrdinalIgnoreCase) ?? false);
+        }
+
+        private static void SetTransparentBackgrounds(IEnumerable<DependencyObject> dockTargets)
         {
             foreach (var docktarget in dockTargets)
             {
@@ -86,10 +97,9 @@ namespace ClaudiaIDE
             var loadImageTask = ImageProvider.Instance.Loader.GetBitmapAsync();
 
             await JoinableTaskFactory.SwitchToMainThreadAsync();
-            var rRootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
             if (_settings.ImageBackgroundType == ImageBackgroundType.Single || !_settings.ExpandToIDE)
             {
-                rRootGrid.Children.Remove(_current);
+                _rootGrid.Children.Remove(_current);
                 _current = null;
             }
 
@@ -112,11 +122,9 @@ namespace ClaudiaIDE
                 Grid.SetRowSpan(_current, 4);
                 RenderOptions.SetBitmapScalingMode(_current, BitmapScalingMode.Fant);
 
-                rRootGrid.Children.Insert(0, _current);
+                _rootGrid.Children.Insert(0, _current);
 
-                var docktargets = rRootGrid.Descendants<DependencyObject>().Where(x =>
-                    x.GetType().FullName == "Microsoft.VisualStudio.PlatformUI.Shell.Controls.DockTarget");
-                SetDockTargetBackgrounds(docktargets);
+                SetTransparentBackgrounds(GetDockTargets());
             }
             else
             {
