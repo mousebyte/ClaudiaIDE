@@ -20,9 +20,16 @@ namespace ClaudiaIDE
             });
         }
 
+        public static ImageProvider Instance { get; private set; }
+
         public IImageLoader Loader => _imageLoader;
 
-        public static ImageProvider Instance { get; private set; }
+        public event EventHandler ProviderChanged;
+
+        private void InvokeProviderChanged()
+        {
+            ProviderChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         private void ReloadSettings()
         {
@@ -44,13 +51,6 @@ namespace ClaudiaIDE
         private void OnSettingsChanged(object sender, EventArgs e)
         {
             ReloadSettings();
-        }
-
-        public event EventHandler ProviderChanged;
-
-        private void InvokeProviderChanged()
-        {
-            ProviderChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }
