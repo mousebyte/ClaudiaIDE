@@ -1,5 +1,7 @@
 using System;
-using System.Collections;
+/*
+ * Implementation based on https://github.com/madskristensen/OptionsSample
+ */
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing.Design;
@@ -7,13 +9,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
 using System.Threading.Tasks;
 using ClaudiaIDE.Localized;
 using ClaudiaIDE.Options;
-using EnvDTE;
-using EnvDTE80;
 using Microsoft;
 using Microsoft.VisualStudio.Settings;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -23,25 +21,23 @@ using Newtonsoft.Json;
 using AsyncServiceProvider = Microsoft.VisualStudio.Shell.AsyncServiceProvider;
 using ThreadHelper = Microsoft.VisualStudio.Shell.ThreadHelper;
 
+
 namespace ClaudiaIDE.Settings
 {
     public class Setting
     {
-        private static AsyncLazy<Setting> _liveModel =
+        private static readonly AsyncLazy<Setting> LiveModel =
             new AsyncLazy<Setting>(CreateAsync, ThreadHelper.JoinableTaskFactory);
 
-        private static AsyncLazy<ShellSettingsManager> _settingsManager =
+        private static readonly AsyncLazy<ShellSettingsManager> SettingsManager =
             new AsyncLazy<ShellSettingsManager>(GetSettingsManagerAsync, ThreadHelper.JoinableTaskFactory);
 
-        private static readonly string CONFIGFILE = "config.txt";
-        private const string DefaultBackgroundImage = "Images\\background.png";
-        private const string DefaultBackgroundFolder = "Images";
-
-        internal System.IServiceProvider ServiceProvider { get; set; }
+        private static readonly string DefaultBackgroundImage;
+        private static readonly string DefaultBackgroundFolder;
 
         public WeakEvent<EventArgs> OnChanged = new WeakEvent<EventArgs>();
 
-        public static Task<Setting> GetLiveInstanceAsync() => _liveModel.GetValueAsync();
+        public static Task<Setting> GetLiveInstanceAsync() => LiveModel.GetValueAsync();
 
         private static async Task<ShellSettingsManager> GetSettingsManagerAsync()
         {
@@ -73,154 +69,125 @@ namespace ClaudiaIDE.Settings
             }
         }
 
-        private Setting()
+        static Setting()
         {
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            BackgroundImagesDirectoryAbsolutePath =
-                Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, DefaultBackgroundFolder);
-            BackgroundImageAbsolutePath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
+            var assemblylocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            DefaultBackgroundFolder =
+                Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, "Images");
+            DefaultBackgroundImage = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
                 DefaultBackgroundImage);
-            Opacity = 0.35;
-            PositionHorizon = PositionH.Right;
-            PositionVertical = PositionV.Bottom;
-            ImageStretch = ImageStretch.None;
-            UpdateImageInterval = TimeSpan.FromMinutes(30);
-            ImageFadeAnimationInterval = TimeSpan.FromSeconds(0);
-            Extensions = ".png, .jpg";
-            ImageBackgroundType = ImageBackgroundType.Single;
-            LoopSlideshow = true;
-            ShuffleSlideshow = false;
-            MaxWidth = 0;
-            MaxHeight = 0;
-            SoftEdgeX = 0;
-            SoftEdgeY = 0;
-            ExpandToIDE = false;
-            ViewBoxPointX = 0;
-            ViewBoxPointY = 0;
         }
+
+        private Setting() { }
 
         [LocalManager.LocalizedCategory("Image")]
         [LocalManager.LocalizedDisplayName("BackgroundType")]
         [LocalManager.LocalizedDescription("BackgroundTypeDes")]
         [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(ImageBackgroundTypeConverter))]
         [TypeConverter(typeof(ImageBackgroundTypeConverter))]
-        public ImageBackgroundType ImageBackgroundType { get; set; }
+        public ImageBackgroundType ImageBackgroundType { get; set; } = ImageBackgroundType.Single;
 
         [LocalManager.LocalizedCategory("Image")]
         [LocalManager.LocalizedDisplayName("OpacityType")]
         [LocalManager.LocalizedDescription("OpacityTypeDes")]
-        public double Opacity { get; set; }
-
+        public double Opacity { get; set; } = 0.35d;
 
         [LocalManager.LocalizedCategoryAttribute("Layout")]
         [LocalManager.LocalizedDisplayName("VerticalAlignmentType")]
         [LocalManager.LocalizedDescription("VerticalAlignmentTypeDes")]
         [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(PositionVTypeConverter))]
         [TypeConverter(typeof(PositionVTypeConverter))]
-        public PositionV PositionVertical { get; set; }
-
+        public PositionV PositionVertical { get; set; } = PositionV.Bottom;
 
         [LocalManager.LocalizedCategoryAttribute("Layout")]
         [LocalManager.LocalizedDisplayName("HorizontalAlignmentType")]
         [LocalManager.LocalizedDescription("HorizontalAlignmentTypeDes")]
         [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(PositionHTypeConverter))]
         [TypeConverter(typeof(PositionHTypeConverter))]
-        public PositionH PositionHorizon { get; set; }
+        public PositionH PositionHorizon { get; set; } = PositionH.Right;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("MaxWidthType")]
         [LocalManager.LocalizedDescription("MaxWidthTypeDes")]
-        public int MaxWidth { get; set; }
+        public int MaxWidth { get; set; } = 0;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("MaxHeightType")]
         [LocalManager.LocalizedDescription("MaxHeightTypeDes")]
-        public int MaxHeight { get; set; }
+        public int MaxHeight { get; set; } = 0;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("SoftEdgeX")]
         [LocalManager.LocalizedDescription("SoftEdgeDes")]
-        public int SoftEdgeX { get; set; }
+        public int SoftEdgeX { get; set; } = 0;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("SoftEdgeY")]
         [LocalManager.LocalizedDescription("SoftEdgeDes")]
-        public int SoftEdgeY { get; set; }
+        public int SoftEdgeY { get; set; } = 0;
 
         [LocalManager.LocalizedCategory("SingleImage")]
         [LocalManager.LocalizedDisplayName("FilePathType")]
         [LocalManager.LocalizedDescription("FilePathTypeDes")]
         [EditorAttribute(typeof(BrowseFile), typeof(UITypeEditor))]
-        public string BackgroundImageAbsolutePath { get; set; }
+        public string BackgroundImageAbsolutePath { get; set; } = DefaultBackgroundImage;
 
         [LocalManager.LocalizedCategory("Slideshow")]
         [LocalManager.LocalizedDisplayName("UpdateIntervalType")]
         [LocalManager.LocalizedDescription("UpdateIntervalTypeDes")]
         [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(TimeSpanConverter))]
         [TypeConverter(typeof(TimeSpanConverter))]
-        public TimeSpan UpdateImageInterval { get; set; }
+        public TimeSpan UpdateImageInterval { get; set; } = TimeSpan.FromMinutes(30);
 
-        public TimeSpan ImageFadeAnimationInterval { get; set; }
+        public TimeSpan ImageFadeAnimationInterval { get; set; } = TimeSpan.FromSeconds(0);
 
         [LocalManager.LocalizedCategory("Slideshow")]
         [LocalManager.LocalizedDisplayName("DirectoryPathType")]
         [LocalManager.LocalizedDescription("DirectoryPathTypeDes")]
         [EditorAttribute(typeof(BrowseDirectory), typeof(UITypeEditor))]
-        public string BackgroundImagesDirectoryAbsolutePath { get; set; }
+        public string BackgroundImagesDirectoryAbsolutePath { get; set; } = DefaultBackgroundFolder;
 
         [LocalManager.LocalizedCategory("Slideshow")]
         [LocalManager.LocalizedDisplayName("ImageExtensionsType")]
         [LocalManager.LocalizedDescription("ImageExtensionsTypeDes")]
-        public string Extensions { get; set; }
+        public string Extensions { get; set; } = ".png, .jpg";
 
         [LocalManager.LocalizedCategory("Slideshow")]
         [LocalManager.LocalizedDisplayName("LoopSlideshowType")]
         [LocalManager.LocalizedDescription("LoopSlideshowTypeDes")]
-        public bool LoopSlideshow { get; set; }
+        public bool LoopSlideshow { get; set; } = true;
+
         [LocalManager.LocalizedCategoryAttribute("Slideshow")]
         [LocalManager.LocalizedDisplayName("ShuffleSlideshowType")]
         [LocalManager.LocalizedDescription("ShuffleSlideshowTypeDes")]
-        public bool ShuffleSlideshow { get; set; }
+        public bool ShuffleSlideshow { get; set; } = true;
+
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("ImageStretchType")]
         [LocalManager.LocalizedDescription("ImageStretchTypeDes")]
         [Microsoft.VisualStudio.Shell.PropertyPageTypeConverter(typeof(ImageStretchTypeConverter))]
         [TypeConverter(typeof(ImageStretchTypeConverter))]
-        public ImageStretch ImageStretch { get; set; }
+        public ImageStretch ImageStretch { get; set; } = ImageStretch.None;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("ExpandToIDEType")]
         [LocalManager.LocalizedDescription("ExpandToIDETypeDes")]
-        public bool ExpandToIDE { get; set; }
+        public bool ExpandToIDE { get; set; } = false;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("ViewBoxPointX")]
         [LocalManager.LocalizedDescription("ViewBoxPointXDes")]
-        public double ViewBoxPointX { get; set; }
+        public double ViewBoxPointX { get; set; } = 0;
 
         [LocalManager.LocalizedCategory("Layout")]
         [LocalManager.LocalizedDisplayName("ViewBoxPointY")]
         [LocalManager.LocalizedDescription("ViewBoxPointYDes")]
-        public double ViewBoxPointY { get; set; }
-
-        public void Serialize()
-        {
-            var config = JsonSerializer<Setting>.Serialize(this);
-
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var configpath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, CONFIGFILE);
-
-            using (var s = new StreamWriter(configpath, false, Encoding.ASCII))
-            {
-                s.Write(config);
-                s.Close();
-            }
-        }
+        public double ViewBoxPointY { get; set; } = 0;
 
 
         public async Task SaveAsync()
         {
-            var manager = await _settingsManager.GetValueAsync();
+            var manager = await SettingsManager.GetValueAsync();
             var settingsStore = manager.GetWritableSettingsStore(SettingsScope.UserSettings);
             if (!settingsStore.CollectionExists(CollectionName))
             {
@@ -246,7 +213,7 @@ namespace ClaudiaIDE.Settings
 
         public async Task LoadAsync()
         {
-            var manager = await _settingsManager.GetValueAsync();
+            var manager = await SettingsManager.GetValueAsync();
             var settingsStore = manager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
             if (!settingsStore.CollectionExists(CollectionName))
             {
@@ -270,24 +237,6 @@ namespace ClaudiaIDE.Settings
             }
         }
 
-        private static object DeserializeValue(string value, Type type)
-        {
-            var b = Convert.FromBase64String(value);
-            using (var strm = new MemoryStream(b))
-            {
-                var formatter = new BinaryFormatter();
-                return formatter.Deserialize(strm);
-            }
-        }
-
-        private static string SerializeValue<T>(T value)
-        {
-            using (var strm = new MemoryStream())
-            {
-                return TypeDescriptor.GetConverter(typeof(T)).ConvertToString(value);
-            }
-        }
-
         public void Load()
         {
             ThreadHelper.JoinableTaskFactory.Run(LoadAsync);
@@ -298,44 +247,9 @@ namespace ClaudiaIDE.Settings
             ThreadHelper.JoinableTaskFactory.Run(SaveAsync);
         }
 
-        public void OnApplyChanged()
+        private void OnApplyChanged()
         {
             OnChanged?.RaiseEvent(this, EventArgs.Empty);
-        }
-
-        public static Setting Deserialize()
-        {
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var configpath = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, CONFIGFILE);
-            string config = "";
-
-            using (var s = new StreamReader(configpath, Encoding.ASCII, false))
-            {
-                config = s.ReadToEnd();
-                s.Close();
-            }
-
-            var ret = JsonSerializer<Setting>.DeSerialize(config);
-            ret.BackgroundImageAbsolutePath = ToFullPath(ret.BackgroundImageAbsolutePath, DefaultBackgroundImage);
-            ret.BackgroundImagesDirectoryAbsolutePath =
-                ToFullPath(ret.BackgroundImagesDirectoryAbsolutePath, DefaultBackgroundFolder);
-            return ret;
-        }
-
-        public static string ToFullPath(string path, string defaultPath)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                path = defaultPath;
-            }
-
-            var assemblylocation = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            if (!Path.IsPathRooted(path))
-            {
-                path = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, path);
-            }
-
-            return path;
         }
     }
 
