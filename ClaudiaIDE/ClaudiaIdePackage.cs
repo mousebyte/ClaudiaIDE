@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -29,14 +28,15 @@ namespace ClaudiaIDE
     [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class ClaudiaIdePackage : AsyncPackage
     {
-        private Window _mainWindow;
-        private Grid _rootGrid;
-        private Image _current;
-
-        private bool _hasTransparentTheme;
+        private const string DockTargetName = "Microsoft.VisualStudio.PlatformUI.Shell.Controls.DockTarget";
 
         //assume transparent theme if the color resource identified by this key has an alpha less than 255 (opaque).
         private static readonly ThemeResourceKey TransparentThemeDetectKey = TreeViewColors.BackgroundColorKey;
+
+        private Image _current;
+        private bool _hasTransparentTheme;
+        private Window _mainWindow;
+        private Grid _rootGrid;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken,
             IProgress<ServiceProgressData> progress)
@@ -54,62 +54,6 @@ namespace ClaudiaIDE
                 ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
                 ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
             };
-        }
-
-
-        private void DetectTransparentTheme()
-        {
-            var color = VSColorTheme.GetThemedColor(TransparentThemeDetectKey);
-            _hasTransparentTheme = color.A < 255;
-        }
-
-        private void Setup()
-        {
-            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
-            {
-                var settings = await Setting.GetLiveInstanceAsync();
-                settings.OnChanged.AddEventHandler(ReloadSettings);
-                VSColorTheme.ThemeChanged += args => DetectTransparentTheme();
-                DetectTransparentTheme();
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                //root grid shouldn't change
-                _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
-                Debug.Assert(ImageProvider.Instance != null,
-                    "ImageProvider.Instance != null");
-                ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
-                ImageProvider.Instance.ProviderChanged += OnProviderChanged;
-                ReloadSettings(this, EventArgs.Empty);
-            });
-        }
-
-        private const string DockTargetName = "Microsoft.VisualStudio.PlatformUI.Shell.Controls.DockTarget";
-
-        private IEnumerable<DependencyObject> GetDockTargets()
-        {
-            return _rootGrid.Descendants<DependencyObject>().Where(x =>
-                x.GetType().FullName?.Equals(DockTargetName, StringComparison.OrdinalIgnoreCase) ?? false);
-        }
-
-        private static void SetTransparentBackgrounds(IEnumerable<DependencyObject> dockTargets)
-        {
-            foreach (var docktarget in dockTargets)
-            {
-                var grids = docktarget.Descendants<Grid>();
-                foreach (var g in grids)
-                {
-                    if (g == null) continue;
-                    var prop = g.GetType().GetProperty("Background");
-                    if (!(prop?.GetValue(g) is SolidColorBrush bg) || bg.Color.A == 0x00) continue;
-                    prop.SetValue(g, new SolidColorBrush(Color.FromArgb(0, bg.Color.R, bg.Color.G, bg.Color.B)));
-                }
-            }
-        }
-
-        private void ResetImage()
-        {
-            if (_current == null) return;
-            _rootGrid.Children.Remove(_current);
-            _current = null;
         }
 
         private async Task ChangeImageAsync()
@@ -139,10 +83,7 @@ namespace ClaudiaIDE
                 RenderOptions.SetBitmapScalingMode(_current, BitmapScalingMode.Fant);
                 _rootGrid.Children.Insert(0, _current);
 
-                if (!_hasTransparentTheme)
-                {
-                    SetTransparentBackgrounds(GetDockTargets());
-                }
+                if (!_hasTransparentTheme) SetTransparentBackgrounds(GetDockTargets());
             }
             else
             {
@@ -163,15 +104,69 @@ namespace ClaudiaIDE
             }
         }
 
-        private void OnProviderChanged(object sender, EventArgs args)
+
+        private void DetectTransparentTheme()
         {
-            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
+            var color = VSColorTheme.GetThemedColor(TransparentThemeDetectKey);
+            _hasTransparentTheme = color.A < 255;
+        }
+
+        private IEnumerable<DependencyObject> GetDockTargets()
+        {
+            return _rootGrid.Descendants<DependencyObject>().Where(x =>
+                x.GetType().FullName?.Equals(DockTargetName, StringComparison.OrdinalIgnoreCase) ?? false);
+        }
+
+        private void ResetImage()
+        {
+            if (_current == null) return;
+            _rootGrid.Children.Remove(_current);
+            _current = null;
+        }
+
+        private static void SetTransparentBackgrounds(IEnumerable<DependencyObject> dockTargets)
+        {
+            foreach (var docktarget in dockTargets)
+            {
+                var grids = docktarget.Descendants<Grid>();
+                foreach (var g in grids)
+                {
+                    if (g == null) continue;
+                    var prop = g.GetType().GetProperty("Background");
+                    if (!(prop?.GetValue(g) is SolidColorBrush bg) || bg.Color.A == 0x00) continue;
+                    prop.SetValue(g, new SolidColorBrush(Color.FromArgb(0, bg.Color.R, bg.Color.G, bg.Color.B)));
+                }
+            }
+        }
+
+        private void Setup()
+        {
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                var settings = await Setting.GetLiveInstanceAsync();
+                settings.OnChanged.AddEventHandler(ReloadSettings);
+                VSColorTheme.ThemeChanged += args => DetectTransparentTheme();
+                DetectTransparentTheme();
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                //root grid shouldn't change
+                _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
+                Debug.Assert(ImageProvider.Instance != null,
+                    "ImageProvider.Instance != null");
+                ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
+                ImageProvider.Instance.ProviderChanged += OnProviderChanged;
+                ReloadSettings(this, EventArgs.Empty);
+            });
         }
 
         private void InvokeChangeImage(object sender, EventArgs e)
         {
             ThreadHelper.JoinableTaskFactory.RunAsync(ChangeImageAsync)
                 .FileAndForget("claudiaide/claudiaidepackage/invokechangeimage");
+        }
+
+        private void OnProviderChanged(object sender, EventArgs args)
+        {
+            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
         }
 
         private void ReloadSettings(object sender, EventArgs e)
