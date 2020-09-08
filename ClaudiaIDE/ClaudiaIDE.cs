@@ -13,7 +13,7 @@ using Microsoft.VisualStudio.Text.Editor;
 namespace ClaudiaIDE
 {
     /// <summary>
-    /// Adornment class that draws a square box in the top right hand corner of the viewport
+    ///     Adornment class that draws a square box in the top right hand corner of the viewport
     /// </summary>
     public class ClaudiaIDE
     {
@@ -28,10 +28,10 @@ namespace ClaudiaIDE
         private DependencyObject _wpfTextViewHost;
 
         /// <summary>
-        /// Creates a square image and attaches an event handler to the layout changed event that
-        /// adds the the square in the upper right-hand corner of the TextView via the adornment layer
+        ///     Creates a square image and attaches an event handler to the layout changed event that
+        ///     adds the the square in the upper right-hand corner of the TextView via the adornment layer
         /// </summary>
-        /// <param name="view">The <see cref="IWpfTextView"/> upon which the adornment will be drawn</param>
+        /// <param name="view">The <see cref="IWpfTextView" /> upon which the adornment will be drawn</param>
         public ClaudiaIDE(IWpfTextView view)
         {
             _view = view;
@@ -60,56 +60,6 @@ namespace ClaudiaIDE
                     RenderOptions.SetBitmapScalingMode(_wpfTextViewHost, BitmapScalingMode.Fant);
                 return _wpfTextViewHost;
             }
-        }
-
-        private void OnThemeChanged(ThemeChangedEventArgs e)
-        {
-            SetTransparentBrush();
-            SetCanvasBackground();
-        }
-
-
-        private void SetTransparentBrush()
-        {
-            var color = VSColorTheme.GetThemedColor(TreeViewColors.BackgroundColorKey);
-            _transparentBrush =
-                new SolidColorBrush(Color.FromArgb(color.A < 255 ? color.A : (byte) 0, color.R, color.G, color.B));
-        }
-
-        private void OnProviderChanged(object sender, EventArgs e)
-        {
-            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
-            ChangeImage();
-        }
-
-        private void OnViewBackgroundBrushChanged(object s, BackgroundBrushChangedEventArgs e)
-        {
-            _hasImage = false;
-            SetCanvasBackground();
-        }
-
-        private void OnViewClosed(object s, EventArgs e)
-        {
-            ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
-            ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
-            Setting.Instance.OnChanged.RemoveEventHandler(ReloadSettings);
-        }
-
-        private void OnViewLayoutChanged(object s, TextViewLayoutChangedEventArgs e)
-        {
-            if (!_hasImage) ChangeImage();
-            else RefreshBackground();
-        }
-
-        private void InvokeChangeImage(object sender, EventArgs e)
-        {
-            ChangeImage();
-        }
-
-        private void ReloadSettings(object sender, EventArgs e)
-        {
-            _hasImage = false;
-            ChangeImage();
         }
 
         private void ChangeImage()
@@ -173,6 +123,67 @@ namespace ClaudiaIDE
             }).FileAndForget("claudiaide/claudiaide/changeimage");
         }
 
+        private static DependencyObject FindUI(DependencyObject d, DependencyType type)
+        {
+            var current = d;
+            do
+            {
+                if (GetDependencyType(current) == type) return current;
+                current = current is Visual || current is Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            } while (current != null);
+
+            return null;
+        }
+
+
+        private static DependencyType GetDependencyType(DependencyObject obj)
+        {
+            var fullName = obj.GetType().FullName;
+            return fullName switch
+            {
+                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView" => DependencyType.WpfTextView,
+                "Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost" => DependencyType.WpfMultiViewHost,
+                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextViewHost" => DependencyType.WpfTextViewHost,
+                "Microsoft.VisualStudio.PlatformUI.MainWindow" => DependencyType.MainWindow,
+                "System.Windows.Controls.Grid" => DependencyType.Grid,
+                "System.Windows.Controls.Border" => DependencyType.Border,
+                _ => DependencyType.Other
+            };
+        }
+
+        private void GetViewType()
+        {
+            if (!(_view is DependencyObject parent))
+                throw new InvalidOperationException("Could not cast view to DependencyObject.");
+            DependencyObject current;
+
+            do
+            {
+                current = parent;
+                parent = current is Visual || current is Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            } while (parent != null);
+
+            var type = GetDependencyType(current);
+
+            _isRootWindow = type == DependencyType.WpfMultiViewHost || type == DependencyType.WpfTextViewHost;
+            _isMainWindow = type == DependencyType.MainWindow;
+            // maybe editor with designer area or other view window
+        }
+
+        private void RefreshAdornment()
+        {
+            _adornmentLayer.RemoveAdornmentsByTag("ClaudiaIDE");
+            _adornmentLayer.AddAdornment(AdornmentPositioningBehavior.ViewportRelative,
+                null,
+                "ClaudiaIDE",
+                _editorCanvas,
+                null);
+        }
+
         private void RefreshBackground()
         {
             SetCanvasBackground();
@@ -203,30 +214,32 @@ namespace ClaudiaIDE
             }).FileAndForget("claudiaide/claudiaide/refreshbackground");
         }
 
-        private void RefreshAdornment()
+        private void SetBackgroundToTransparent(DependencyObject d, bool isTransparent)
         {
-            _adornmentLayer.RemoveAdornmentsByTag("ClaudiaIDE");
-            _adornmentLayer.AddAdornment(AdornmentPositioningBehavior.ViewportRelative,
-                null,
-                "ClaudiaIDE",
-                _editorCanvas,
-                null);
-        }
-
-
-        private static DependencyType GetDependencyType(DependencyObject obj)
-        {
-            var fullName = obj.GetType().FullName;
-            return fullName switch
+            var property = d.GetType().GetProperty("Background");
+            if (!(property?.GetValue(d) is Brush brush)) return;
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextView" => DependencyType.WpfTextView,
-                "Microsoft.VisualStudio.Editor.Implementation.WpfMultiViewHost" => DependencyType.WpfMultiViewHost,
-                "Microsoft.VisualStudio.Text.Editor.Implementation.WpfTextViewHost" => DependencyType.WpfTextViewHost,
-                "Microsoft.VisualStudio.PlatformUI.MainWindow" => DependencyType.MainWindow,
-                "System.Windows.Controls.Grid" => DependencyType.Grid,
-                "System.Windows.Controls.Border" => DependencyType.Border,
-                _ => DependencyType.Other
-            };
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                try
+                {
+                    var hash = d.GetHashCode();
+                    if (isTransparent)
+                    {
+                        if (!_defaultThemeColor.ContainsKey(hash))
+                            _defaultThemeColor[hash] = brush;
+                        property.SetValue(d, Brushes.Transparent);
+                    }
+                    else if (_defaultThemeColor.TryGetValue(hash, out var obj))
+                    {
+                        property.SetValue(d, (Brush) obj);
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw new InvalidOperationException("Error: SetBackgroundToTransparent failed.", e);
+                }
+            });
         }
 
 
@@ -298,67 +311,54 @@ namespace ClaudiaIDE
             prop?.SetValue(obj, _transparentBrush);
         }
 
-        private void GetViewType()
+
+        private void SetTransparentBrush()
         {
-            if (!(_view is DependencyObject parent))
-                throw new InvalidOperationException("Could not cast view to DependencyObject.");
-            DependencyObject current;
-
-            do
-            {
-                current = parent;
-                parent = current is Visual || current is Visual3D
-                    ? VisualTreeHelper.GetParent(current)
-                    : LogicalTreeHelper.GetParent(current);
-            } while (parent != null);
-
-            var type = GetDependencyType(current);
-
-            _isRootWindow = type == DependencyType.WpfMultiViewHost || type == DependencyType.WpfTextViewHost;
-            _isMainWindow = type == DependencyType.MainWindow;
-            // maybe editor with designer area or other view window
+            var color = VSColorTheme.GetThemedColor(TreeViewColors.BackgroundColorKey);
+            _transparentBrush =
+                new SolidColorBrush(Color.FromArgb(color.A < 255 ? color.A : (byte) 0, color.R, color.G, color.B));
         }
 
-        private static DependencyObject FindUI(DependencyObject d, DependencyType type)
+        private void InvokeChangeImage(object sender, EventArgs e)
         {
-            var current = d;
-            do
-            {
-                if (GetDependencyType(current) == type) return current;
-                current = current is Visual || current is Visual3D
-                    ? VisualTreeHelper.GetParent(current)
-                    : LogicalTreeHelper.GetParent(current);
-            } while (current != null);
-
-            return null;
+            ChangeImage();
         }
 
-        private void SetBackgroundToTransparent(DependencyObject d, bool isTransparent)
+        private void OnProviderChanged(object sender, EventArgs e)
         {
-            var property = d.GetType().GetProperty("Background");
-            if (!(property?.GetValue(d) is Brush brush)) return;
-            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
-            {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                try
-                {
-                    var hash = d.GetHashCode();
-                    if (isTransparent)
-                    {
-                        if (!_defaultThemeColor.ContainsKey(hash))
-                            _defaultThemeColor[hash] = brush;
-                        property.SetValue(d, Brushes.Transparent);
-                    }
-                    else if (_defaultThemeColor.TryGetValue(hash, out var obj))
-                    {
-                        property.SetValue(d, (Brush) obj);
-                    }
-                }
-                catch (Exception e)
-                {
-                    throw new InvalidOperationException("Error: SetBackgroundToTransparent failed.", e);
-                }
-            });
+            ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
+            ChangeImage();
+        }
+
+        private void OnThemeChanged(ThemeChangedEventArgs e)
+        {
+            SetTransparentBrush();
+            SetCanvasBackground();
+        }
+
+        private void OnViewBackgroundBrushChanged(object s, BackgroundBrushChangedEventArgs e)
+        {
+            _hasImage = false;
+            SetCanvasBackground();
+        }
+
+        private void OnViewClosed(object s, EventArgs e)
+        {
+            ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
+            ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
+            Setting.Instance.OnChanged.RemoveEventHandler(ReloadSettings);
+        }
+
+        private void OnViewLayoutChanged(object s, TextViewLayoutChangedEventArgs e)
+        {
+            if (!_hasImage) ChangeImage();
+            else RefreshBackground();
+        }
+
+        private void ReloadSettings(object sender, EventArgs e)
+        {
+            _hasImage = false;
+            ChangeImage();
         }
 
         private enum DependencyType
