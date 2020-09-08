@@ -12,6 +12,7 @@ using ClaudiaIDE.Helpers;
 using ClaudiaIDE.MenuCommands;
 using ClaudiaIDE.Options;
 using ClaudiaIDE.Settings;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Task = System.Threading.Tasks.Task;
@@ -33,6 +34,11 @@ namespace ClaudiaIDE
         private Grid _rootGrid;
         private Image _current;
 
+        private bool _hasTransparentTheme;
+
+        //assume transparent theme if the color resource identified by this key has an alpha less than 255 (opaque).
+        private static readonly ThemeResourceKey TransparentThemeDetectKey = TreeViewColors.BackgroundColorKey;
+
         protected override async Task InitializeAsync(CancellationToken cancellationToken,
             IProgress<ServiceProgressData> progress)
         {
@@ -53,6 +59,13 @@ namespace ClaudiaIDE
             };
         }
 
+
+        private void DetectTransparentTheme()
+        {
+            var color = VSColorTheme.GetThemedColor(TransparentThemeDetectKey);
+            _hasTransparentTheme = color.A < 255;
+        }
+
         private void Setup()
         {
             ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
@@ -61,6 +74,8 @@ namespace ClaudiaIDE
                 _settings.OnChanged.AddEventHandler(ReloadSettings);
                 //root grid shouldn't change
                 _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
+                VSColorTheme.ThemeChanged += args => DetectTransparentTheme();
+                DetectTransparentTheme();
                 Debug.Assert(ImageProvider.Instance != null,
                     "ImageProvider.Instance != null");
                 ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
@@ -121,10 +136,12 @@ namespace ClaudiaIDE
 
                 Grid.SetRowSpan(_current, 4);
                 RenderOptions.SetBitmapScalingMode(_current, BitmapScalingMode.Fant);
-
                 _rootGrid.Children.Insert(0, _current);
 
-                SetTransparentBackgrounds(GetDockTargets());
+                if (!_hasTransparentTheme)
+                {
+                    SetTransparentBackgrounds(GetDockTargets());
+                }
             }
             else
             {
