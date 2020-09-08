@@ -135,8 +135,6 @@ namespace ClaudiaIDE
                     }
                 );
             }
-
-            GC.Collect();
         }
 
         private void OnProviderChanged(object sender, EventArgs args)
