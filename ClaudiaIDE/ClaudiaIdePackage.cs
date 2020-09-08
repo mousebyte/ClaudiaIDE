@@ -29,7 +29,6 @@ namespace ClaudiaIDE
     [ProvideMenuResource("Menus.ctmenu", 1)]
     public sealed class ClaudiaIdePackage : AsyncPackage
     {
-        private Setting _settings;
         private Window _mainWindow;
         private Grid _rootGrid;
         private Image _current;
@@ -45,7 +44,6 @@ namespace ClaudiaIDE
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             await NextImage.InitializeAsync(this);
             await PauseSlideshow.InitializeAsync(this);
-            _settings = await Setting.GetLiveInstanceAsync();
             Debug.Assert(Application.Current.MainWindow != null,
                 "Application.Current.MainWindow != null");
             _mainWindow = Application.Current.MainWindow;
@@ -55,7 +53,6 @@ namespace ClaudiaIDE
             {
                 ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
                 ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
-                _settings.OnChanged.RemoveEventHandler(ReloadSettings);
             };
         }
 
@@ -70,12 +67,13 @@ namespace ClaudiaIDE
         {
             ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                _settings.OnChanged.AddEventHandler(ReloadSettings);
-                //root grid shouldn't change
-                _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
+                var settings = await Setting.GetLiveInstanceAsync();
+                settings.OnChanged.AddEventHandler(ReloadSettings);
                 VSColorTheme.ThemeChanged += args => DetectTransparentTheme();
                 DetectTransparentTheme();
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                //root grid shouldn't change
+                _rootGrid = (Grid) _mainWindow.Template.FindName("RootGrid", _mainWindow);
                 Debug.Assert(ImageProvider.Instance != null,
                     "ImageProvider.Instance != null");
                 ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
@@ -107,31 +105,34 @@ namespace ClaudiaIDE
             }
         }
 
+        private void ResetImage()
+        {
+            if (_current == null) return;
+            _rootGrid.Children.Remove(_current);
+            _current = null;
+        }
+
         private async Task ChangeImageAsync()
         {
             var loadImageTask = ImageProvider.Instance.Loader.GetBitmapAsync();
-
+            var settings = await Setting.GetLiveInstanceAsync();
             await JoinableTaskFactory.SwitchToMainThreadAsync();
-            if (_settings.ImageBackgroundType == ImageBackgroundType.Single || !_settings.ExpandToIDE)
+            if (!settings.ExpandToIDE)
             {
-                _rootGrid.Children.Remove(_current);
-                _current = null;
-            }
-
-            if (!_settings.ExpandToIDE)
-            {
+                ResetImage();
                 return;
             }
 
-            if (_settings.ImageBackgroundType == ImageBackgroundType.Single || _current == null)
+            if (settings.ImageBackgroundType == ImageBackgroundType.Single || _current == null)
             {
+                ResetImage();
                 _current = new Image
                 {
                     Source = await loadImageTask,
-                    Stretch = _settings.ImageStretch.ConvertTo(),
-                    HorizontalAlignment = _settings.PositionHorizon.ConvertToHorizontalAlignment(),
-                    VerticalAlignment = _settings.PositionVertical.ConvertToVerticalAlignment(),
-                    Opacity = _settings.Opacity
+                    Stretch = settings.ImageStretch.ConvertTo(),
+                    HorizontalAlignment = settings.PositionHorizon.ConvertToHorizontalAlignment(),
+                    VerticalAlignment = settings.PositionVertical.ConvertToVerticalAlignment(),
+                    Opacity = settings.Opacity
                 };
 
                 Grid.SetRowSpan(_current, 4);
@@ -149,14 +150,14 @@ namespace ClaudiaIDE
                     await loadImageTask,
                     n =>
                     {
-                        n.Stretch = _settings.ImageStretch.ConvertTo();
-                        n.HorizontalAlignment = _settings.PositionHorizon.ConvertToHorizontalAlignment();
-                        n.VerticalAlignment = _settings.PositionVertical.ConvertToVerticalAlignment();
+                        n.Stretch = settings.ImageStretch.ConvertTo();
+                        n.HorizontalAlignment = settings.PositionHorizon.ConvertToHorizontalAlignment();
+                        n.VerticalAlignment = settings.PositionVertical.ConvertToVerticalAlignment();
                     },
                     new AnimateImageChangeParams
                     {
-                        FadeTime = _settings.ImageFadeAnimationInterval,
-                        TargetOpacity = _settings.Opacity
+                        FadeTime = settings.ImageFadeAnimationInterval,
+                        TargetOpacity = settings.Opacity
                     }
                 );
             }
