@@ -11,7 +11,6 @@ namespace ClaudiaIDE.Loaders
         private readonly Timer _timer;
         private BitmapSource _bitmap;
         private ImageFileList _slideshow;
-        public bool Paused { get; set; }
 
         public SlideshowImageLoader(Setting settings)
             : base(settings, ImageBackgroundType.Slideshow)
@@ -24,22 +23,18 @@ namespace ClaudiaIDE.Loaders
             Setup();
         }
 
-        public void NextImage()
-        {
-            if (!_slideshow.Next()) return;
-            _bitmap = null;
-            InvokeImageChanged();
-        }
+        public bool Paused { get; set; }
 
         public override async Task<BitmapSource> GetBitmapAsync()
         {
             return _bitmap ??= await LoadImageAsync(_slideshow.Current);
         }
 
-        private void ReloadSettings(object sender, EventArgs e)
+        public void NextImage()
         {
-            if (Settings.ImageBackgroundType == ImageBackgroundType.Slideshow) Setup();
-            else _timer.Change(Timeout.Infinite, Timeout.Infinite);
+            if (!_slideshow.Next()) return;
+            _bitmap = null;
+            InvokeImageChanged();
         }
 
         private void Setup()
@@ -58,6 +53,12 @@ namespace ClaudiaIDE.Loaders
         ~SlideshowImageLoader()
         {
             Settings.OnChanged.RemoveEventHandler(ReloadSettings);
+        }
+
+        private void ReloadSettings(object sender, EventArgs e)
+        {
+            if (Settings.ImageBackgroundType == ImageBackgroundType.Slideshow) Setup();
+            else _timer.Change(Timeout.Infinite, Timeout.Infinite);
         }
     }
 }

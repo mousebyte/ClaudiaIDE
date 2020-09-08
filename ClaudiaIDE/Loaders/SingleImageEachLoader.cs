@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using ClaudiaIDE.Settings;
 
 namespace ClaudiaIDE.Loaders
 {
-    class SingleImageEachLoader : ImageLoader
+    internal class SingleImageEachLoader : ImageLoader
     {
         private ImageFileList _imagePaths;
 

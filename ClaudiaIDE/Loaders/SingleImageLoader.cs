@@ -20,15 +20,15 @@ namespace ClaudiaIDE.Loaders
             return _bitmap ??= await LoadImageAsync(Settings.BackgroundImageAbsolutePath);
         }
 
+        ~SingleImageLoader()
+        {
+            Settings.OnChanged.RemoveEventHandler(ReloadSettings);
+        }
+
         private void ReloadSettings(object sender, EventArgs e)
         {
             _bitmap = null;
             InvokeImageChanged();
-        }
-
-        ~SingleImageLoader()
-        {
-            Settings.OnChanged.RemoveEventHandler(ReloadSettings);
         }
     }
 }
