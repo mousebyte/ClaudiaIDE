@@ -33,21 +33,6 @@ namespace ClaudiaIDE.Loaders
             return true;
         }
 
-        //make sure the same image doesn't show up too soon
-        private bool ValidateShuffle(IList<string> prevOrder)
-        {
-            var count = prevOrder.Count;
-            if (count <= 2) return true;
-            var firstIsDifferent =
-                _filePaths[0] != prevOrder[count - 1]
-                && _filePaths[0] != prevOrder[count - 2];
-            var secondIsDifferent =
-                count == 3
-                || _filePaths[1] != prevOrder[count - 1]
-                && _filePaths[1] != prevOrder[count - 2];
-            return firstIsDifferent && secondIsDifferent;
-        }
-
         private bool TryLoop()
         {
             if (!_loop) return false;
@@ -62,6 +47,21 @@ namespace ClaudiaIDE.Loaders
             }
 
             return true;
+        }
+
+        //make sure the same image doesn't show up too soon
+        private bool ValidateShuffle(IList<string> prevOrder)
+        {
+            var count = prevOrder.Count;
+            if (count <= 2) return true;
+            var firstIsDifferent =
+                _filePaths[0] != prevOrder[count - 1]
+                && _filePaths[0] != prevOrder[count - 2];
+            var secondIsDifferent =
+                count == 3
+                || _filePaths[1] != prevOrder[count - 1]
+                && _filePaths[1] != prevOrder[count - 2];
+            return firstIsDifferent && secondIsDifferent;
         }
     }
 }
