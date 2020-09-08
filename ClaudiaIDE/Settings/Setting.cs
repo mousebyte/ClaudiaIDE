@@ -35,6 +35,8 @@ namespace ClaudiaIDE.Settings
         private static readonly string DefaultBackgroundImage;
         private static readonly string DefaultBackgroundFolder;
 
+        private static readonly string CollectionName = typeof(Setting).FullName;
+
         public WeakEvent<EventArgs> OnChanged = new WeakEvent<EventArgs>();
 
         public static Task<Setting> GetLiveInstanceAsync() => LiveModel.GetValueAsync();
@@ -208,8 +210,6 @@ namespace ClaudiaIDE.Settings
                 liveModel.OnApplyChanged();
             }
         }
-
-        private string CollectionName => typeof(Setting).FullName;
 
         public async Task LoadAsync()
         {
