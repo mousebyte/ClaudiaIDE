@@ -9,6 +9,7 @@ using Microsoft.VisualStudio.Text.Classification;
 namespace ClaudiaIDE
 {
     #region Adornment Factory
+
     /// <summary>
     /// Establishes an <see cref="IAdornmentLayer"/> to place the adornment on and exports the <see cref="IWpfTextViewCreationListener"/>
     /// that instantiates the adornment on the event of a <see cref="IWpfTextView"/>'s creation
@@ -19,9 +20,7 @@ namespace ClaudiaIDE
     [TextViewRole(PredefinedTextViewRoles.Document)]
     internal sealed class ClaudiaIDEAdornmentFactory : IWpfTextViewCreationListener
     {
-
-        [Import(typeof(SVsServiceProvider))]
-        internal System.IServiceProvider ServiceProvider { get; set; }
+        [Import(typeof(SVsServiceProvider))] internal System.IServiceProvider ServiceProvider { get; set; }
 
         /// <summary>
         /// Defines the adornment layer for the scarlet adornment. This layer is ordered 
@@ -38,11 +37,6 @@ namespace ClaudiaIDE
         /// <param name="textView">The <see cref="IWpfTextView"/> upon which the adornment should be placed</param>
         public void TextViewCreated(IWpfTextView textView)
         {
-            if (ImageProvider.Instance == null)
-            {
-                ImageProvider.Initialize(Setting.Instance);
-            }
-
             new ClaudiaIDE(textView);
         }
     }

@@ -1,41 +1,44 @@
 using System;
 using ClaudiaIDE.Loaders;
 using ClaudiaIDE.Settings;
+using Microsoft.VisualStudio.Shell;
 
 namespace ClaudiaIDE
 {
     internal class ImageProvider
     {
-        private readonly Setting _settings;
         private ImageLoader _imageLoader;
 
-        private ImageProvider(Setting settings)
+        static ImageProvider()
         {
-            _settings = settings;
-            settings.OnChanged.AddEventHandler(OnSettingsChanged);
-            ReloadSettings();
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                Instance = new ImageProvider();
+                var settings = await Setting.GetLiveInstanceAsync();
+                settings.OnChanged.AddEventHandler(Instance.OnSettingsChanged);
+                Instance.ReloadSettings();
+            });
         }
 
         public IImageLoader Loader => _imageLoader;
-
-        public static void Initialize(Setting settings)
-        {
-            Instance = new ImageProvider(settings);
-        }
 
         public static ImageProvider Instance { get; private set; }
 
         private void ReloadSettings()
         {
-            if (_settings.ImageBackgroundType == _imageLoader?.BackgroundType) return;
-            _imageLoader = _settings.ImageBackgroundType switch
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                ImageBackgroundType.Single => new SingleImageLoader(_settings),
-                ImageBackgroundType.Slideshow => new SlideshowImageLoader(_settings),
-                ImageBackgroundType.SingleEach => new SingleImageEachLoader(_settings),
-                _ => throw new ArgumentOutOfRangeException()
-            };
-            InvokeProviderChanged();
+                var settings = await Setting.GetLiveInstanceAsync();
+                if (settings.ImageBackgroundType == _imageLoader?.BackgroundType) return;
+                _imageLoader = settings.ImageBackgroundType switch
+                {
+                    ImageBackgroundType.Single => new SingleImageLoader(settings),
+                    ImageBackgroundType.Slideshow => new SlideshowImageLoader(settings),
+                    ImageBackgroundType.SingleEach => new SingleImageEachLoader(settings),
+                    _ => throw new ArgumentOutOfRangeException()
+                };
+                InvokeProviderChanged();
+            });
         }
 
         private void OnSettingsChanged(object sender, EventArgs e)
@@ -45,7 +48,7 @@ namespace ClaudiaIDE
 
         public event EventHandler ProviderChanged;
 
-        protected virtual void InvokeProviderChanged()
+        private void InvokeProviderChanged()
         {
             ProviderChanged?.Invoke(this, EventArgs.Empty);
         }

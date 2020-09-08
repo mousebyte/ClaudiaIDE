@@ -56,7 +56,6 @@ namespace ClaudiaIDE
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 _settings.OnChanged.AddEventHandler(ReloadSettings);
-                if (ImageProvider.Instance == null) ImageProvider.Initialize(_settings);
                 Debug.Assert(ImageProvider.Instance != null,
                     "ImageProvider.Instance != null");
                 ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;

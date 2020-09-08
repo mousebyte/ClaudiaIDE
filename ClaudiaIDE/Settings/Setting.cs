@@ -39,6 +39,8 @@ namespace ClaudiaIDE.Settings
 
         public WeakEvent<EventArgs> OnChanged = new WeakEvent<EventArgs>();
 
+
+
         public static Task<Setting> GetLiveInstanceAsync() => LiveModel.GetValueAsync();
 
         private static async Task<ShellSettingsManager> GetSettingsManagerAsync()
@@ -77,7 +79,7 @@ namespace ClaudiaIDE.Settings
             DefaultBackgroundFolder =
                 Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation, "Images");
             DefaultBackgroundImage = Path.Combine(string.IsNullOrEmpty(assemblylocation) ? "" : assemblylocation,
-                DefaultBackgroundImage);
+                "Images\\background.png");
         }
 
         private Setting() { }

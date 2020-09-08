@@ -20,7 +20,6 @@ namespace ClaudiaIDE
         private readonly IAdornmentLayer _adornmentLayer;
         private readonly Dictionary<int, DependencyObject> _defaultThemeColor = new Dictionary<int, DependencyObject>();
         private readonly Canvas _editorCanvas = new Canvas {IsHitTestVisible = false};
-        private readonly Setting _settings = Setting.Instance;
         private readonly IWpfTextView _view;
         private bool _hasImage;
         private bool _isMainWindow;
@@ -40,7 +39,8 @@ namespace ClaudiaIDE
             view.LayoutChanged += OnViewLayoutChanged;
             view.Closed += OnViewClosed;
             view.BackgroundBrushChanged += OnViewBackgroundBrushChanged;
-            _settings.OnChanged.AddEventHandler(ReloadSettings);
+            //should be on ui thread here
+            Setting.Instance.OnChanged.AddEventHandler(ReloadSettings);
             ImageProvider.Instance.Loader.ImageChanged += InvokeChangeImage;
             ImageProvider.Instance.ProviderChanged += OnProviderChanged;
             VSColorTheme.ThemeChanged += OnThemeChanged;
@@ -72,7 +72,8 @@ namespace ClaudiaIDE
         private void SetTransparentBrush()
         {
             var color = VSColorTheme.GetThemedColor(TreeViewColors.BackgroundColorKey);
-            _transparentBrush = new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+            _transparentBrush =
+                new SolidColorBrush(Color.FromArgb(color.A < 255 ? color.A : (byte) 0, color.R, color.G, color.B));
         }
 
         private void OnProviderChanged(object sender, EventArgs e)
@@ -91,7 +92,7 @@ namespace ClaudiaIDE
         {
             ImageProvider.Instance.ProviderChanged -= OnProviderChanged;
             ImageProvider.Instance.Loader.ImageChanged -= InvokeChangeImage;
-            _settings.OnChanged.RemoveEventHandler(ReloadSettings);
+            Setting.Instance.OnChanged.RemoveEventHandler(ReloadSettings);
         }
 
         private void OnViewLayoutChanged(object s, TextViewLayoutChangedEventArgs e)
@@ -116,11 +117,12 @@ namespace ClaudiaIDE
             ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 var loadImageTask = ImageProvider.Instance.Loader.GetBitmapAsync();
+                var settings = await Setting.GetLiveInstanceAsync();
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 SetCanvasBackground();
                 if (WpfTextViewHost == null) return;
 
-                var opacity = _settings.ExpandToIDE && _isMainWindow ? 0.0 : _settings.Opacity;
+                var opacity = settings.ExpandToIDE && _isMainWindow ? 0.0 : settings.Opacity;
                 if (_isRootWindow)
                 {
                     var grid = new Grid
@@ -133,9 +135,9 @@ namespace ClaudiaIDE
                     var img = new Image
                     {
                         Source = await loadImageTask,
-                        Stretch = _settings.ImageStretch.ConvertTo(),
-                        HorizontalAlignment = _settings.PositionHorizon.ConvertToHorizontalAlignment(),
-                        VerticalAlignment = _settings.PositionVertical.ConvertToVerticalAlignment(),
+                        Stretch = settings.ImageStretch.ConvertTo(),
+                        HorizontalAlignment = settings.PositionHorizon.ConvertToHorizontalAlignment(),
+                        VerticalAlignment = settings.PositionVertical.ConvertToVerticalAlignment(),
                         Opacity = opacity,
                         IsHitTestVisible = false
                     };
@@ -158,11 +160,11 @@ namespace ClaudiaIDE
                 {
                     var nib = new ImageBrush(await loadImageTask)
                     {
-                        Stretch = _settings.ImageStretch.ConvertTo(),
-                        AlignmentX = _settings.PositionHorizon.ConvertTo(),
-                        AlignmentY = _settings.PositionVertical.ConvertTo(),
+                        Stretch = settings.ImageStretch.ConvertTo(),
+                        AlignmentX = settings.PositionHorizon.ConvertTo(),
+                        AlignmentY = settings.PositionVertical.ConvertTo(),
                         Opacity = opacity,
-                        Viewbox = new Rect(new Point(_settings.ViewBoxPointX, 0), new Size(1, 1))
+                        Viewbox = new Rect(new Point(settings.ViewBoxPointX, 0), new Size(1, 1))
                     };
                     _wpfTextViewHost.SetValue(Panel.BackgroundProperty, nib);
                 }
@@ -175,7 +177,8 @@ namespace ClaudiaIDE
         {
             SetCanvasBackground();
             if (WpfTextViewHost == null) return;
-            var opacity = _settings.ExpandToIDE && _isMainWindow ? 0.0 : _settings.Opacity;
+            var settings = Setting.Instance;
+            var opacity = settings.ExpandToIDE && _isMainWindow ? 0.0 : settings.Opacity;
 
             var background = WpfTextViewHost.GetType()
                 .GetProperty("Background")
@@ -234,6 +237,7 @@ namespace ClaudiaIDE
             var current = _editorCanvas as DependencyObject;
             var bottomGridBackgroundSet = false;
             var bottomBorderBackgroundSet = false;
+            var settings = Setting.Instance;
             while (current != null)
             {
                 var objname = current.GetType().GetProperty("Name")?.GetValue(current) as string;
@@ -251,7 +255,7 @@ namespace ClaudiaIDE
                     case DependencyType.WpfTextView:
                         break;
                     case DependencyType.Grid:
-                        if (!bottomGridBackgroundSet && _settings.ExpandToIDE)
+                        if (!bottomGridBackgroundSet && settings.ExpandToIDE)
                         {
                             SetSemiTransparentBackground(current);
                             bottomGridBackgroundSet = true;
@@ -263,7 +267,7 @@ namespace ClaudiaIDE
 
                         break;
                     case DependencyType.Border:
-                        if (!bottomBorderBackgroundSet && _settings.ExpandToIDE)
+                        if (!bottomBorderBackgroundSet && settings.ExpandToIDE)
                         {
                             SetSemiTransparentBackground(current);
                             bottomBorderBackgroundSet = true;
